@@ -12,3 +12,6 @@ pyramid-read = "pyramid_read.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
