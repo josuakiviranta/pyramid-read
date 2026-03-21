@@ -7,3 +7,4 @@ build/
 uv.lock
 .playwright-cli/
 examples/
+docs/
