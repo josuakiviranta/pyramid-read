@@ -26,4 +26,43 @@ def list_headers(text: str, max_level: int) -> list:
 
 
 def extract_section(text: str, heading: str) -> str:
-    raise NotImplementedError
+    heading = heading.rstrip()
+    m = _HEADING_RE.match(heading)
+    if not m:
+        raise ValueError(f"section not found: \"{heading}\"")
+    target_level = len(m.group(1))
+
+    lines = text.splitlines(keepends=True)
+    in_fence = False
+    start = None
+
+    for i, line in enumerate(lines):
+        if _is_fence(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if line.rstrip() == heading:
+            start = i
+            break
+
+    if start is None:
+        raise ValueError(f"section not found: \"{heading}\"")
+
+    result = []
+    in_fence = False
+    for line in lines[start:]:
+        if _is_fence(line):
+            in_fence = not in_fence
+            result.append(line)
+            continue
+        if in_fence:
+            result.append(line)
+            continue
+        hm = _HEADING_RE.match(line)
+        if hm and len(hm.group(1)) <= target_level and result:
+            # reached a sibling or parent heading — stop
+            break
+        result.append(line)
+
+    return "".join(result).rstrip("\n")
