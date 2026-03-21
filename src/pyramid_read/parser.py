@@ -21,8 +21,11 @@ def _iter_headings(text: str):
             yield len(m.group(1)), line
 
 
-def list_headers(text: str) -> list:
-    return [line for _, line in _iter_headings(text)]
+def list_headers(text: str, max_depth: int = None) -> list:
+    return [
+        line for level, line in _iter_headings(text)
+        if max_depth is None or level <= max_depth
+    ]
 
 
 def extract_section(text: str, heading: str) -> str:

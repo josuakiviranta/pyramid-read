@@ -33,6 +33,21 @@ class TestListHeaders:
         result = list_headers(text)
         assert result == ["# H1", "## H2", "### H3", "#### H4"]
 
+    def test_max_depth_filters_deep_headers(self):
+        text = "# H1\n## H2\n### H3\n#### H4\n"
+        result = list_headers(text, max_depth=2)
+        assert result == ["# H1", "## H2"]
+
+    def test_max_depth_none_returns_all(self):
+        text = "# H1\n## H2\n### H3\n"
+        result = list_headers(text, max_depth=None)
+        assert result == ["# H1", "## H2", "### H3"]
+
+    def test_max_depth_1_returns_only_h1(self):
+        text = "# H1\n## H2\n### H3\n"
+        result = list_headers(text, max_depth=1)
+        assert result == ["# H1"]
+
 
 class TestExtractSection:
     def test_returns_heading_and_content(self):
