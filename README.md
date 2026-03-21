@@ -29,10 +29,10 @@ pyramid-read file.md "# Overview"
 
 ```
 $ pyramid-read docs/spec.md "#"
-# Balancer Server Spec
+# Document name
 
 $ pyramid-read docs/spec.md "##"
-# Balancer Server Spec
+# Document name
 ## Overview
 ## Tech Stack
 ## Authentication
@@ -41,10 +41,10 @@ $ pyramid-read docs/spec.md "##"
 $ pyramid-read docs/spec.md "## Authentication"
 ## Authentication
 
-### Sellers
+### Users
 - Register via Firebase Authentication...
 
-### Companies (Buyers)
+### Admins
 - Register via Firebase Authentication...
 ```
 
