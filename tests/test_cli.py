@@ -16,13 +16,18 @@ def run(*args):
 
 
 class TestCLIListMode:
-    def test_hash_lists_all_headers(self):
-        r = run(BALANCER_SERVER, "#")
+    def test_no_query_lists_all_headers(self):
+        r = run(BALANCER_SERVER)
         assert r.returncode == 0
         lines = r.stdout.strip().splitlines()
         assert lines[0] == "# Balancer Server Spec"
         assert "## Overview" in lines
         assert "### Sellers" in lines
+
+    def test_wrong_arg_count_exits_1(self):
+        r = run(BALANCER_SERVER, "##", "extra")
+        assert r.returncode == 1
+        assert "Usage:" in r.stderr
 
 
 class TestCLIExpandMode:
@@ -41,7 +46,7 @@ class TestCLIExpandMode:
 
 class TestCLIErrors:
     def test_missing_args_exits_1(self):
-        r = run(BALANCER_SERVER)
+        r = run()
         assert r.returncode == 1
         assert "Usage:" in r.stderr
 
