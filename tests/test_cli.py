@@ -2,8 +2,7 @@ import os
 import subprocess
 import pytest
 
-EXAMPLES = os.path.join(os.path.dirname(__file__), "..", "examples", "specs")
-BALANCER_SERVER = os.path.join(EXAMPLES, "balancer-server.md")
+BALANCER_SERVER = os.path.join(os.path.dirname(__file__), "fixtures", "balancer-server.md")
 
 
 def run(*args):
