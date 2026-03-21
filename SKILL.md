@@ -21,9 +21,11 @@ Workflow: list → read. Load only what's relevant.
 
 ## If you are dispatching subagents
 
-Subagents need Bash to run `pyramid-read`. Explicitly state it in the prompt:
+Use `subagent_type: "pyramid-reader"` — a custom subagent with `Bash(pyramid-read:*)` pre-authorized in its `tools` field.
 
-> You are authorized to use Bash to run `pyramid-read` commands.
+**Why:** Claude Code's permission system auto-denies Bash in subagents unless it is listed in the subagent's `tools` frontmatter. A prompt-time grant is not enough.
+
+The `pyramid-reader` subagent is defined in `.claude/agents/pyramid-reader.md`. Copy it to `~/.claude/agents/` to make it available across all projects.
 
 ## Quick start
 
