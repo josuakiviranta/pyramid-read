@@ -8,15 +8,22 @@ allowed-tools: Bash(pyramid-read:*)
 
 ## If you are a subagent
 
-Give them very short instructions to use `pyramid-read` instead of the `Read` tool for any markdown file.
+Use `pyramid-read` via Bash instead of the `Read` tool for any markdown file.
 
-Explanation of the task and giving these commands should be enough:
+**Requires Bash access.** If you don't have it, respond with `NEEDS_CONTEXT: requires Bash permission to run pyramid-read`.
+
 ```bash
-pyramid-read <file.md> "#"                 # list all headers
-pyramid-read <file.md> "## Section Name"  # read a full section
+pyramid-read <file.md> "#"                # list all headers
+pyramid-read <file.md> "## Section Name" # read a full section
 ```
 
 Workflow: list → read. Load only what's relevant.
+
+## If you are dispatching subagents
+
+Subagents need Bash to run `pyramid-read`. Explicitly state it in the prompt:
+
+> You are authorized to use Bash to run `pyramid-read` commands.
 
 ## Quick start
 
