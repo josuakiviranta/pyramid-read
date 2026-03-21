@@ -10,10 +10,10 @@ pip install -e .
 
 ## Usage
 
-**List all headers:**
+**List all headers in a file:**
 
 ```bash
-pyramid-read file.md "#"    # all headers at every depth
+pyramid-read file.md
 ```
 
 **Expand a section (returns full content including subsections):**
@@ -23,10 +23,16 @@ pyramid-read file.md "## Authentication"
 pyramid-read file.md "# Overview"
 ```
 
+**Survey a folder (each .md file with headers at depth ≤ 2):**
+
+```bash
+pyramid-read docs/
+```
+
 ## Example
 
 ```
-$ pyramid-read docs/spec.md "#"
+$ pyramid-read docs/spec.md
 # Document name
 ## Overview
 ## Tech Stack
@@ -43,6 +49,20 @@ $ pyramid-read docs/spec.md "## Authentication"
 
 ### Admins
 - Register via Firebase Authentication...
+
+$ pyramid-read docs/
+docs/spec.md
+
+# Document name
+## Overview
+## Tech Stack
+## Authentication
+## Request Lifecycle
+
+docs/other.md
+
+# Other Doc
+## Setup
 ```
 
 ## The idea
