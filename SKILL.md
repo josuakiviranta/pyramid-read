@@ -10,14 +10,15 @@ allowed-tools: Bash(pyramid-read:*)
 
 Use `pyramid-read` via Bash instead of the `Read` tool for any markdown file.
 
-**Requires Bash access.** If you don't have it, respond with `NEEDS_CONTEXT: requires Bash permission to run pyramid-read`.
+**Requires Bash access.** If you don't have it, respond with `NEEDS_CONTEXT: requires Bash permission to run pyramid-read`
 
 ```bash
-pyramid-read <file.md> "#"                # list all headers
+pyramid-read <file.md>                   # list all headers
 pyramid-read <file.md> "## Section Name" # read a full section
+pyramid-read <folder>                    # survey folder (headers ≤ depth 2 per file)
 ```
 
-Workflow: list → read. Load only what's relevant.
+Workflow: survey/list → read. Load only what's relevant.
 
 ## If you are dispatching subagents
 
@@ -30,23 +31,25 @@ The `pyramid-reader` subagent is defined in `.claude/agents/pyramid-reader.md`. 
 ## Quick start
 
 ```bash
-pyramid-read docs/spec.md "#"               # list all headers
-pyramid-read docs/spec.md "## Overview"     # read a specific section in full
+pyramid-read docs/spec.md               # list all headers
+pyramid-read docs/spec.md "## Overview" # read a specific section in full
+pyramid-read docs/                      # survey folder — all .md files, headers ≤ depth 2
 ```
 
 ## Core workflow
 
-1. **List** — run `"#"` to see all headers across the document
-2. **Read** — expand the section you need by passing its full heading string
+1. **Survey** — run `pyramid-read <folder>` to see headers across all docs in a folder (depth ≤ 2)
+2. **List** — run `pyramid-read <file>` to see all headers in one file
+3. **Read** — expand the section you need by passing its full heading string
 
 This keeps context usage low. Load only what's relevant.
 
 ## Commands
 
-### List mode — query is only `#` characters
+### List mode — no query argument
 
 ```bash
-pyramid-read <file> "#"     # all headers at every depth
+pyramid-read <file>     # all headers at every depth
 ```
 
 Output: one header per line, as they appear in the document.
@@ -61,6 +64,14 @@ pyramid-read <file> "### Subsection"
 
 Output: the heading line plus all content beneath it, including all subsections, until the next heading of equal or lesser depth.
 
+### Folder mode — path is a directory
+
+```bash
+pyramid-read <folder>   # each .md file with headers at depth ≤ 2
+```
+
+Output: for each .md file (alphabetical), the file path followed by its depth-1 and depth-2 headers. File blocks separated by blank lines.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -73,23 +84,29 @@ Errors go to stderr. Output goes to stdout.
 ## Example: progressive document reading
 
 ```bash
-# Step 1: list all headers
-pyramid-read spec.md "#"
+# Step 1: survey the docs folder
+pyramid-read docs/
+# → docs/spec.md
+# →
 # → # Backend Server Spec
 # → ## Overview
-# → ## Tech Stack
 # → ## Authentication
 # → ## Request Lifecycle
 
-# Step 2: read the relevant section
-pyramid-read spec.md "## Authentication"
+# Step 2: list all headers in a specific file
+pyramid-read docs/spec.md
+# → # Backend Server Spec
+# → ## Overview
+# → ## Authentication
+# → ### Sellers
+# → ## Request Lifecycle
+
+# Step 3: read the relevant section
+pyramid-read docs/spec.md "## Authentication"
 # → ## Authentication
 # →
-# → ### Users
+# → ### Sellers
 # → - Register via Firebase...
-# →
-# → ### Companies
-# → ...
 ```
 
 ## Example: error handling
@@ -99,7 +116,7 @@ pyramid-read spec.md "## Nonexistent"
 # stderr: Error: section not found: "## Nonexistent"
 # exit code: 1
 
-pyramid-read missing.md "#"
+pyramid-read missing.md
 # stderr: Error: file not found: missing.md
 # exit code: 1
 ```
@@ -109,3 +126,4 @@ pyramid-read missing.md "#"
 - Headings inside code fences (` ``` `) are ignored — they are not treated as document structure
 - Expand mode is deep: it captures the heading plus all nested subsections
 - List mode returns all headers at every depth
+- Folder mode returns headers at depth ≤ 2 only (h1 and h2)
