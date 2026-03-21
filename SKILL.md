@@ -1,26 +1,34 @@
 ---
 name: pyramid-read
-description: Read markdown files at configurable zoom levels. Use when an agent needs
-  to survey document structure without loading full content, or expand a specific section.
-  Supports progressive disclosure — list headers first, expand only what's relevant.
+description: Read markdown files at configurable zoom levels. Use every time when agent or subagents needs to read markdown files instead of "Read"-tool. Supports progressive disclosure — list headers first, expand only what's relevant.
 allowed-tools: Bash(pyramid-read:*)
 ---
 
 # Pyramid Reading with pyramid-read
 
+## If you are a subagent
+
+Give them very short instructions to use `pyramid-read` instead of the `Read` tool for any markdown file.
+
+Explanation of the task and giving these commands should be enough:
+```bash
+pyramid-read <file.md> "#"                 # list all headers
+pyramid-read <file.md> "## Section Name"  # read a full section
+```
+
+Workflow: list → read. Load only what's relevant.
+
 ## Quick start
 
 ```bash
-pyramid-read docs/spec.md "#"               # survey top-level structure
-pyramid-read docs/spec.md "##"              # expand one level deeper
+pyramid-read docs/spec.md "#"               # list all headers
 pyramid-read docs/spec.md "## Overview"     # read a specific section in full
 ```
 
 ## Core workflow
 
-1. **Survey** — list headers at level `#` to see the document shape
-2. **Narrow** — list at `##` or `###` to find the relevant section
-3. **Read** — expand the section you need by passing its full heading string
+1. **List** — run `"#"` to see all headers across the document
+2. **Read** — expand the section you need by passing its full heading string
 
 This keeps context usage low. Load only what's relevant.
 
@@ -29,9 +37,7 @@ This keeps context usage low. Load only what's relevant.
 ### List mode — query is only `#` characters
 
 ```bash
-pyramid-read <file> "#"     # all level-1 headers
-pyramid-read <file> "##"    # level-1 and level-2 headers
-pyramid-read <file> "###"   # headers up to level 3
+pyramid-read <file> "#"     # all headers at every depth
 ```
 
 Output: one header per line, as they appear in the document.
@@ -58,26 +64,22 @@ Errors go to stderr. Output goes to stdout.
 ## Example: progressive document reading
 
 ```bash
-# Step 1: what's in this document?
+# Step 1: list all headers
 pyramid-read spec.md "#"
-# → # Balancer Server Spec
-
-# Step 2: what sections exist?
-pyramid-read spec.md "##"
-# → # Balancer Server Spec
+# → # Backend Server Spec
 # → ## Overview
 # → ## Tech Stack
 # → ## Authentication
 # → ## Request Lifecycle
 
-# Step 3: read the relevant section
+# Step 2: read the relevant section
 pyramid-read spec.md "## Authentication"
 # → ## Authentication
 # →
-# → ### Sellers
+# → ### Users
 # → - Register via Firebase...
 # →
-# → ### Companies (Buyers)
+# → ### Companies
 # → ...
 ```
 
@@ -97,4 +99,4 @@ pyramid-read missing.md "#"
 
 - Headings inside code fences (` ``` `) are ignored — they are not treated as document structure
 - Expand mode is deep: it captures the heading plus all nested subsections
-- List mode at level N includes all headers from level 1 through N
+- List mode returns all headers at every depth

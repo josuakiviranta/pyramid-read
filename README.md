@@ -10,12 +10,10 @@ pip install -e .
 
 ## Usage
 
-**List headers by depth:**
+**List all headers:**
 
 ```bash
-pyramid-read file.md "#"    # all top-level headers
-pyramid-read file.md "##"   # top-level and second-level headers
-pyramid-read file.md "###"  # headers up to depth 3
+pyramid-read file.md "#"    # all headers at every depth
 ```
 
 **Expand a section (returns full content including subsections):**
@@ -30,12 +28,11 @@ pyramid-read file.md "# Overview"
 ```
 $ pyramid-read docs/spec.md "#"
 # Document name
-
-$ pyramid-read docs/spec.md "##"
-# Document name
 ## Overview
 ## Tech Stack
 ## Authentication
+### Users
+### Admins
 ## Request Lifecycle
 
 $ pyramid-read docs/spec.md "## Authentication"
