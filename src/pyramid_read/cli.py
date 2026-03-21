@@ -20,7 +20,7 @@ def main():
         sys.exit(1)
 
     if _LEVEL_RE.match(query):
-        results = list_headers(text, len(query))
+        results = list_headers(text)
         print("\n".join(results))
     else:
         try:

@@ -16,23 +16,12 @@ def run(*args):
 
 
 class TestCLIListMode:
-    def test_level1_returns_h1(self):
+    def test_hash_lists_all_headers(self):
         r = run(BALANCER_SERVER, "#")
-        assert r.returncode == 0
-        assert r.stdout.strip() == "# Balancer Server Spec"
-
-    def test_level2_returns_h1_and_h2(self):
-        r = run(BALANCER_SERVER, "##")
         assert r.returncode == 0
         lines = r.stdout.strip().splitlines()
         assert lines[0] == "# Balancer Server Spec"
         assert "## Overview" in lines
-        assert not any(l.startswith("### ") for l in lines)
-
-    def test_level3_includes_h3(self):
-        r = run(BALANCER_SERVER, "###")
-        assert r.returncode == 0
-        lines = r.stdout.strip().splitlines()
         assert "### Sellers" in lines
 
 
