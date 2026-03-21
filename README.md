@@ -2,10 +2,16 @@
 
 CLI tool for reading markdown files at configurable zoom levels. Survey a document's structure by listing headers, then expand only the sections you need.
 
+## Requirements
+
+- Python 3.8+
+
 ## Install
 
 ```bash
-pip install -e .
+git clone https://github.com/josuakiviranta/pyramid-read.git
+cd pyramid-read
+pip install .
 ```
 
 ## Usage
