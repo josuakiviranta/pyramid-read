@@ -6,3 +6,4 @@ dist/
 build/
 uv.lock
 .playwright-cli/
+examples/
