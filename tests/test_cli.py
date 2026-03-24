@@ -55,6 +55,22 @@ class TestCLIErrors:
         assert r.returncode == 1
         assert "file not found" in r.stderr
 
+    def test_non_markdown_file_exits_1(self):
+        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f:
+            f.write(b"# Not markdown\n")
+            path = f.name
+        r = run(path)
+        assert r.returncode == 1
+        assert "not a markdown file" in r.stderr
+
+    def test_non_markdown_file_expand_exits_1(self):
+        with tempfile.NamedTemporaryFile(suffix=".rst", delete=False) as f:
+            f.write(b"Some content\n")
+            path = f.name
+        r = run(path, "## Section")
+        assert r.returncode == 1
+        assert "not a markdown file" in r.stderr
+
 
 class TestCLIFolderMode:
     def setup_method(self):

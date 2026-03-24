@@ -3,7 +3,14 @@ import sys
 from pyramid_read.parser import list_headers, extract_section
 
 
+def _check_markdown(file_path: str) -> None:
+    if not file_path.endswith(".md"):
+        print(f"Error: not a markdown file: {file_path}", file=sys.stderr)
+        sys.exit(1)
+
+
 def _list_file(file_path: str) -> None:
+    _check_markdown(file_path)
     try:
         with open(file_path) as f:
             text = f.read()
@@ -15,6 +22,7 @@ def _list_file(file_path: str) -> None:
 
 
 def _expand_file(file_path: str, query: str) -> None:
+    _check_markdown(file_path)
     try:
         with open(file_path) as f:
             text = f.read()
