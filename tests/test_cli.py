@@ -3,7 +3,7 @@ import subprocess
 import tempfile
 import pytest
 
-BALANCER_SERVER = os.path.join(os.path.dirname(__file__), "fixtures", "balancer-server.md")
+SAMPLE_SPEC = os.path.join(os.path.dirname(__file__), "fixtures", "sample-spec.md")
 
 
 def run(*args):
@@ -17,29 +17,29 @@ def run(*args):
 
 class TestCLIListMode:
     def test_no_query_lists_all_headers(self):
-        r = run(BALANCER_SERVER)
+        r = run(SAMPLE_SPEC)
         assert r.returncode == 0
         lines = r.stdout.strip().splitlines()
-        assert lines[0] == "# Balancer Server Spec"
-        assert "## Overview" in lines
-        assert "### Sellers" in lines
+        assert lines[0] == "# Sample Spec"
+        assert "## Summary" in lines
+        assert "### Users" in lines
 
     def test_wrong_arg_count_exits_1(self):
-        r = run(BALANCER_SERVER, "##", "extra")
+        r = run(SAMPLE_SPEC, "##", "extra")
         assert r.returncode == 1
         assert "Usage:" in r.stderr
 
 
 class TestCLIExpandMode:
     def test_expand_section_returns_content(self):
-        r = run(BALANCER_SERVER, "## Authentication")
+        r = run(SAMPLE_SPEC, "## Access")
         assert r.returncode == 0
-        assert "### Sellers" in r.stdout
-        assert "### Admin" in r.stdout
-        assert "## Notifications" not in r.stdout
+        assert "### Users" in r.stdout
+        assert "### Managers" in r.stdout
+        assert "## Alerts" not in r.stdout
 
     def test_section_not_found_exits_1(self):
-        r = run(BALANCER_SERVER, "## Nonexistent")
+        r = run(SAMPLE_SPEC, "## Nonexistent")
         assert r.returncode == 1
         assert "section not found" in r.stderr
 
