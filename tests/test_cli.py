@@ -112,3 +112,40 @@ class TestCLIFolderMode:
             f.write("# This should not appear\n")
         r = run(self.tmpdir)
         assert "notes.txt" not in r.stdout
+
+    def test_folder_lists_subfolders_with_trailing_slash(self):
+        subdir = os.path.join(self.tmpdir, "subsection")
+        os.makedirs(subdir)
+        r = run(self.tmpdir)
+        assert r.returncode == 0
+        assert "subsection/" in r.stdout
+
+    def test_folder_subfolders_appear_after_files(self):
+        subdir = os.path.join(self.tmpdir, "subsection")
+        os.makedirs(subdir)
+        r = run(self.tmpdir)
+        idx_file = r.stdout.index("a.md")
+        idx_dir = r.stdout.index("subsection/")
+        assert idx_file < idx_dir
+
+    def test_folder_subfolders_sorted_alphabetically(self):
+        os.makedirs(os.path.join(self.tmpdir, "zzz"))
+        os.makedirs(os.path.join(self.tmpdir, "aaa"))
+        r = run(self.tmpdir)
+        idx_aaa = r.stdout.index("aaa/")
+        idx_zzz = r.stdout.index("zzz/")
+        assert idx_aaa < idx_zzz
+
+    def test_folder_with_only_subfolders_shows_them(self):
+        empty_dir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(empty_dir, "child"))
+        r = run(empty_dir)
+        assert r.returncode == 0
+        assert "child/" in r.stdout
+
+    def test_folder_lists_nested_subfolders_recursively(self):
+        os.makedirs(os.path.join(self.tmpdir, "parent", "child"))
+        r = run(self.tmpdir)
+        assert r.returncode == 0
+        assert "parent/" in r.stdout
+        assert "parent/child/" in r.stdout

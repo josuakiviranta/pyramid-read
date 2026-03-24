@@ -29,7 +29,7 @@ pyramid-read file.md "## Authentication"
 pyramid-read file.md "# Overview"
 ```
 
-**Survey a folder (each .md file with headers at depth ≤ 2):**
+**Survey a folder (each .md file with headers at depth ≤ 2, plus all subfolders recursively):**
 
 ```bash
 pyramid-read docs/
@@ -69,6 +69,12 @@ docs/other.md
 
 # Other Doc
 ## Setup
+
+docs/guides/
+
+docs/guides/advanced/
+
+docs/reference/
 ```
 
 ## The idea

@@ -38,21 +38,27 @@ def _expand_file(file_path: str, query: str) -> None:
 
 def _folder_mode(folder_path: str) -> None:
     try:
-        entries = sorted(
-            e for e in os.listdir(folder_path) if e.endswith(".md")
-        )
+        all_entries = os.listdir(folder_path)
     except NotADirectoryError:
         print(f"Error: not a directory: {folder_path}", file=sys.stderr)
         sys.exit(1)
 
+    md_files = sorted(e for e in all_entries if e.endswith(".md"))
     blocks = []
-    for entry in entries:
+    for entry in md_files:
         file_path = os.path.join(folder_path, entry)
         with open(file_path) as f:
             text = f.read()
         headers = list_headers(text, max_depth=2)
         block = file_path + "\n\n" + "\n".join(headers)
         blocks.append(block)
+
+    all_subdirs = []
+    for dirpath, dirnames, _ in os.walk(folder_path):
+        dirnames.sort()
+        if dirpath != folder_path:
+            all_subdirs.append(dirpath + "/")
+    blocks.extend(all_subdirs)
 
     print("\n\n".join(blocks))
 
