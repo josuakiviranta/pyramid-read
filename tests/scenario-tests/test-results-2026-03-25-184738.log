@@ -1,0 +1,357 @@
+━━━ 01-narrow-fact-lookup ━━━
+VANILLA RESPONSE:
+Here are the exact endpoints for creating and deleting todos from `api.md`:
+
+---
+
+## POST /api/todos — Create a todo
+
+**Request body:**
+```json
+{ "text": "Buy milk", "priority": "high" }
+```
+- `priority` defaults to `"medium"` if omitted.
+
+**Response 201:** The created todo object.
+
+**Response 400:**
+```json
+{ "error": "text is required" }
+// or
+{ "error": "invalid priority" }
+```
+
+---
+
+## DELETE /api/todos/:id — Delete a todo
+
+No request body.
+
+**Response 200:**
+```json
+{ "deleted": true }
+```
+
+**Response 404:**
+```json
+{ "error": "not found" }
+```
+
+SKILL RESPONSE:
+Here are the exact HTTP endpoints for creating and deleting todos, from `api.md`:
+
+---
+
+## Create a Todo
+
+**Method & Path:** `POST /api/todos`
+
+**Request body:**
+```json
+{ "text": "Buy milk", "priority": "high" }
+```
+- `text` — required
+- `priority` — optional, defaults to `"medium"`; valid values are implied (invalid values yield a 400)
+
+**Response 201:** The created todo object (same shape as items returned by `GET /api/todos`):
+```json
+{ "id": 2, "text": "Buy milk", "completed": 0, "priority": "high", "created_at": "2024-01-02T10:00:00" }
+```
+
+**Error responses:**
+- `400` — `{ "error": "text is required" }` or `{ "error": "invalid priority" }`
+
+---
+
+## Delete a Todo
+
+**Method & Path:** `DELETE /api/todos/:id`
+
+**Request body:** none
+
+**Response 200:**
+```json
+{ "deleted": true }
+```
+
+**Error responses:**
+- `404` — `{ "error": "not found" }` if the id doesn't exist
+
+METRICS: vanilla cost=$0.08690275000000001 in=6 out=449
+METRICS: skill   cost=$0.0951075 in=7 out=701
+JUDGE: PYRAMID-READ — "Response B is more complete, including the exact shape of the 201 created todo object with field names and types, while Response A only says "the created todo object" without showing its structure."
+
+━━━ 02-cross-file-lookup ━━━
+VANILLA RESPONSE:
+## Todo Item Data Model
+
+### Database Schema (`todos` table — SQLite)
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `INTEGER` | `PRIMARY KEY AUTOINCREMENT` |
+| `text` | `TEXT` | `NOT NULL` |
+| `completed` | `INTEGER` | `NOT NULL DEFAULT 0` (0 = false, 1 = true) |
+| `priority` | `TEXT` | `NOT NULL DEFAULT 'medium'` — valid values: `'low'`, `'medium'`, `'high'` |
+| `created_at` | `TEXT` | `NOT NULL DEFAULT (datetime('now'))` — ISO datetime string |
+
+### TypeScript Shape (shared client/server)
+
+```typescript
+interface Todo {
+  id: number
+  text: string
+  completed: 0 | 1
+  priority: 'low' | 'medium' | 'high'
+  created_at: string
+}
+```
+
+Todos are always returned ordered by `created_at DESC`. There is no soft-delete — `DELETE` removes the row permanently.
+
+---
+
+## Frontend Components
+
+### Rendering
+
+- **`App` (`client/src/App.tsx`)** — root; owns the `todos` state array, fetches all todos on mount.
+- **`TodoList` (`client/src/components/TodoList.tsx`)** — iterates the array and renders a `<TodoItem>` per entry; shows "No todos yet" when empty.
+- **`TodoItem` (`client/src/components/TodoItem.tsx`)** — renders the checkbox, text, priority badge (color-coded pill), and delete button for a single todo.
+
+### Mutation
+
+| Component | Mutation |
+|---|---|
+| **`TodoInput`** (`TodoInput.tsx`) | **Create** — text field + priority select + submit; calls `onSubmit(text, priority)` |
+| **`TodoItem`** | **Update (toggle)** — checkbox calls `onUpdate(id, { completed: 0\|1 })` |
+| **`TodoItem`** | **Update (text edit)** — double-click enters inline edit mode; blur/Enter saves, Escape cancels |
+| **`TodoItem`** | **Delete** — delete button calls `onDelete(id)` |
+
+All mutations flow through handlers (`handleCreate`, `handleUpdate`, `handleDelete`) defined in `App`, which delegate to the typed API wrappers in `client/src/lib/api.ts`.
+
+SKILL RESPONSE:
+## Todo Item Data Model
+
+### Database Schema (`todos` table — SQLite)
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `INTEGER` | `PRIMARY KEY AUTOINCREMENT` |
+| `text` | `TEXT` | `NOT NULL` |
+| `completed` | `INTEGER` | `NOT NULL DEFAULT 0` (0 = false, 1 = true) |
+| `priority` | `TEXT` | `NOT NULL DEFAULT 'medium'` — valid values: `'low'`, `'medium'`, `'high'` |
+| `created_at` | `TEXT` | `NOT NULL DEFAULT (datetime('now'))` — ISO datetime string |
+
+### TypeScript Interface
+
+```typescript
+interface Todo {
+  id: number
+  text: string
+  completed: 0 | 1
+  priority: 'low' | 'medium' | 'high'
+  created_at: string
+}
+```
+
+Key notes: `completed` is a SQLite integer (0/1), not a JS boolean. Todos are always returned ordered by `created_at DESC`. DELETE is permanent (no soft-delete).
+
+---
+
+## Frontend Components
+
+### Rendering
+
+- **`App`** (`client/src/App.tsx`) — root; owns the `todos` state array, fetches all todos on mount.
+- **`TodoList`** (`client/src/components/TodoList.tsx`) — iterates the array and renders a `<TodoItem>` for each; shows "No todos yet" when empty.
+- **`TodoItem`** (`client/src/components/TodoItem.tsx`) — renders a single todo: checkbox, text, priority badge (color-coded pill), and delete button.
+
+### Mutating
+
+| Component | Mutation | How |
+|---|---|---|
+| **`TodoInput`** | Create | Controlled text input + priority `<select>`; calls `onSubmit(text, priority)` |
+| **`TodoItem`** | Toggle `completed` | Checkbox calls `onUpdate(id, { completed: 0\|1 })` |
+| **`TodoItem`** | Edit `text` | Double-click enters inline edit; blur/Enter saves, Escape cancels |
+| **`TodoItem`** | Delete | Delete button calls `onDelete(id)` |
+
+All mutations go through the API layer (`client/src/lib/api.ts`), which calls `PATCH /api/todos/:id` for updates and `DELETE /api/todos/:id` for deletes. The `App` component owns the handlers (`handleCreate`, `handleUpdate`, `handleDelete`) and passes them down as props.
+
+METRICS: vanilla cost=$0.07529825000000001 in=6 out=913
+METRICS: skill   cost=$0.07513825 in=754 out=944
+JUDGE: TIE — "Both responses are equally accurate and complete, covering the same schema, TypeScript interface, and component breakdown with nearly identical information; minor formatting differences (B adds a "How" column and a SQLite boolean note) don't meaningfully change answer quality."
+
+━━━ 03-broad-survey ━━━
+VANILLA RESPONSE:
+Here is a complete overview of the todo app based on the documentation:
+
+---
+
+## Todo App Overview
+
+### What It Does
+
+A full-stack todo application supporting:
+- **Create** todos with a text and priority level (low / medium / high)
+- **Edit** todo text inline (double-click)
+- **Complete** todos via checkbox toggle
+- **Delete** todos permanently
+- **Priority badges** displayed as color-coded pills (gray / blue / red)
+
+---
+
+### How It Is Structured
+
+A **monorepo** with two workspaces and an e2e test folder:
+
+```
+todo-test-vanilla/
+├── package.json      # root workspaces + concurrently scripts
+├── client/           # Vite + React SPA — owns all UI state
+├── server/           # Express REST API — owns all persistence
+└── e2e/              # Playwright end-to-end tests
+```
+
+**Frontend component tree (`client/`):**
+```
+App                   # root, owns todos[] state
+├── TodoInput         # text field + priority select + submit
+└── TodoList
+    └── TodoItem[]    # checkbox, inline edit, priority badge, delete
+```
+
+**Backend (`server/`):** A REST API over a single SQLite `todos` table with four endpoints — `GET`, `POST`, `PATCH`, `DELETE` on `/api/todos`.
+
+**Data model:** One table, `todos`, with columns `id`, `text`, `completed` (integer 0/1), `priority`, and `created_at`. Todos are always returned ordered by `created_at DESC`.
+
+---
+
+### Technologies Used
+
+| Layer | Technologies |
+|---|---|
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui |
+| Backend | Express, TypeScript, better-sqlite3 (SQLite) |
+| Testing | Vitest, Supertest, React Testing Library, Playwright |
+| Dev tooling | Vite dev proxy (`/api/*` → `:3001`), concurrently |
+
+In **development**, the Vite dev server (`:5173`) proxies API calls to Express (`:3001`). In **production**, Express serves the built client as static files.
+
+SKILL RESPONSE:
+Here is an overview of the todo app based on the documentation:
+
+---
+
+## What It Does
+
+A full-stack todo app that supports:
+- Creating todos with a text and priority level (low / medium / high)
+- Completing todos (checkbox toggle)
+- Inline editing of todo text (double-click)
+- Deleting todos
+- Priority displayed as a color-coded badge (gray / blue / red)
+
+---
+
+## Tech Stack
+
+| Layer | Technologies |
+|---|---|
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui |
+| Backend | Express, TypeScript, better-sqlite3 (SQLite) |
+| Testing | Vitest, Supertest, React Testing Library, Playwright |
+| Dev tooling | Vite proxies `/api/*` to Express on `:3001`; production serves the built client from Express |
+
+---
+
+## Structure
+
+It is a **monorepo** with two workspaces plus an e2e directory:
+
+```
+todo-test-vanilla/
+├── package.json      # root workspaces + concurrently scripts
+├── client/           # Vite + React SPA — owns all UI state
+├── server/           # Express REST API — owns all persistence (SQLite)
+└── e2e/              # Playwright end-to-end tests
+```
+
+**Frontend component tree:**
+```
+App                   # owns todos state, fetches on mount
+├── TodoInput         # text field + priority select + submit
+└── TodoList
+    └── TodoItem[]    # checkbox, inline-editable text, priority badge, delete
+```
+
+**Backend API** (`/api/todos`):
+- `GET /api/todos` — list all, ordered newest first
+- `POST /api/todos` — create (requires `text`; `priority` defaults to `medium`)
+- `PATCH /api/todos/:id` — partial update (text, completed, priority)
+- `DELETE /api/todos/:id` — permanent delete
+
+---
+
+## Data Model
+
+A single SQLite table `todos`:
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK | auto-increment |
+| `text` | TEXT | required |
+| `completed` | INTEGER | `0` = false, `1` = true |
+| `priority` | TEXT | `'low'` / `'medium'` / `'high'`, default `'medium'` |
+| `created_at` | TEXT | ISO datetime, auto-set |
+
+In tests the database runs in-memory (`:memory:`); in dev/prod it persists to `todos.db`.
+
+METRICS: vanilla cost=$0.0894795 in=1975 out=983
+METRICS: skill   cost=$0.085703 in=1975 out=1080
+JUDGE: PYRAMID-READ — "Response B is more complete and better organized, including the explicit API endpoint details and a structured data model table that Response A lacks."
+
+━━━ 04-ambiguous-question ━━━
+VANILLA RESPONSE:
+Based on the documentation, here is how the app handles errors:
+
+## API Error Handling (Server)
+
+The backend returns structured JSON error responses:
+
+| Scenario | Status | Response |
+|---|---|---|
+| Missing `text` on create | 400 | `{ "error": "text is required" }` |
+| Invalid `priority` value | 400 | `{ "error": "invalid priority" }` |
+| Todo ID not found (PATCH/DELETE) | 404 | `{ "error": "not found" }` |
+
+## Frontend Error Handling (Client)
+
+- **API layer** (`client/src/lib/api.ts`): All fetch wrapper functions **throw on non-2xx responses**. Error propagation is the caller's responsibility.
+- **Input validation**: The submit button is disabled when the text field is empty, preventing empty submissions before they reach the server.
+
+The documentation does not describe any user-facing error display (e.g., toast notifications or error messages in the UI) — that behavior is not specified in the specs.
+
+SKILL RESPONSE:
+Based on the documentation, the app handles errors as follows:
+
+## Error Handling
+
+All errors are returned as JSON objects with an `"error"` key. There are two error status codes used:
+
+### 400 Bad Request
+Returned for invalid input:
+- `POST /api/todos` — `{ "error": "text is required" }` if the `text` field is missing, or `{ "error": "invalid priority" }` if the priority value is not valid.
+- `PATCH /api/todos/:id` — `{ "error": "invalid priority" }` if the priority value is invalid.
+
+### 404 Not Found
+Returned when a referenced resource doesn't exist:
+- `PATCH /api/todos/:id` — `{ "error": "not found" }` if the id doesn't exist.
+- `DELETE /api/todos/:id` — `{ "error": "not found" }` if the id doesn't exist.
+
+The documentation does not describe any other error codes (e.g. 500) or client-side error handling beyond these API-level responses.
+
+METRICS: vanilla cost=$0.08648625 in=546 out=648
+METRICS: skill   cost=$0.0884595 in=8 out=750
+JUDGE: VANILLA — "Response A is more complete, correctly noting frontend error handling (API layer throwing on non-2xx, disabled submit button) that Response B omits entirely."
+

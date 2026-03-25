@@ -1,0 +1,1 @@
+Give me an overview of the entire todo app: what it does, how it is structured, and what technologies it uses.

@@ -1,0 +1,1 @@
+What is the full data model for a todo item, and which frontend components are responsible for rendering and mutating it?
