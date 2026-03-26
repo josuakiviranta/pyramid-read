@@ -18,6 +18,8 @@ SKILL_SUBAGENTS=""           # "" | "vanilla" | "pyramid-reader"
 SKILL_SUBAGENT_MODEL=""      # defaults to SKILL_MODEL if empty
 CUSTOM_SUBAGENT_LAUNCH_PROMPT=""
 NO_SKILL=0
+METRICS_LOG=""
+STAGE_ID=""
 LOGS_DIR="$SCRIPT_DIR/../logs"
 LOG_FILE="$LOGS_DIR/test-results-$(date +%Y-%m-%d-%H%M%S).log"
 AGENTS_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)/.claude/agents"
@@ -35,6 +37,8 @@ usage() {
   echo "  --skill-subagent-model M    Model for skill side subagents (default: skill model)"
   echo "  --subagent-launch-prompt T  Override subagent instruction appended to prompt"
   echo "  --no-skill                  Disable skill on both sides (for subagent-type comparison)"
+  echo "  --metrics-log FILE          Append metrics-only output to FILE (used by run-all-stages.sh)"
+  echo "  --stage-id ID               Stage identifier written to metrics log (e.g. 1a)"
   echo "  --verbose                   Show full claude output"
   exit "${1:-1}"
 }
@@ -53,6 +57,8 @@ while [[ $# -gt 0 ]]; do
     --skill-subagent-model)     SKILL_SUBAGENT_MODEL="$2"; shift 2 ;;
     --subagent-launch-prompt)   CUSTOM_SUBAGENT_LAUNCH_PROMPT="$2"; shift 2 ;;
     --no-skill)                 NO_SKILL=1; shift ;;
+    --metrics-log)              METRICS_LOG="$2"; shift 2 ;;
+    --stage-id)                 STAGE_ID="$2"; shift 2 ;;
     --verbose)                  VERBOSE=1; shift ;;
     -h|--help)                  usage 0 ;;
     *) echo "Unknown option: $1"; usage ;;
@@ -101,6 +107,19 @@ echo "Vanilla-read:  $VANILLA_LABEL"
 echo "Pyramid-read:  $SKILL_LABEL"
 echo "Log:           $LOG_FILE"
 echo ""
+
+if [ -n "$METRICS_LOG" ]; then
+  {
+    echo "════════════════════════════════════════════════"
+    echo "  STAGE ${STAGE_ID}"
+    echo "════════════════════════════════════════════════"
+    echo "Docs:         $DOCS_DIR"
+    echo "Prompts:      $PROMPTS_DIR"
+    echo "Vanilla-read: $VANILLA_LABEL"
+    echo "Pyramid-read: $SKILL_LABEL"
+    echo ""
+  } >> "$METRICS_LOG"
+fi
 
 restore_skill() {
   if [ -d "$SKILL_BAK" ]; then
@@ -388,6 +407,19 @@ $(get_subagent_prompt "$SKILL_SUBAGENTS")"
   echo "  LLM-judge:     ${verdict}"
   echo ""
 
+  # ── Metrics log (no prompts or responses) ──
+  if [ -n "$METRICS_LOG" ]; then
+    {
+      echo "  ${scenario_name}"
+      printf "    Vanilla-read (%s):  in=%s  out=%s  cost=\$%.4f\n" \
+        "$VANILLA_LABEL" "$(fmt_num "$v_input")" "$(fmt_num "$v_output")" "$v_cost"
+      printf "    Pyramid-read (%s):  in=%s  out=%s  cost=\$%.4f  %s\n" \
+        "$SKILL_LABEL" "$(fmt_num "$s_input")" "$(fmt_num "$s_output")" "$s_cost" "$delta_str"
+      echo "    Judge: ${verdict}"
+      echo ""
+    } >> "$METRICS_LOG"
+  fi
+
   # ── Log ──
   {
     echo "━━━ ${scenario_name} ━━━"
@@ -460,3 +492,21 @@ echo "    Tie:                ${judge_tie} scenarios"
 echo ""
 echo "  Log: ${LOG_FILE}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [ -n "$METRICS_LOG" ]; then
+  delta_pct=$(echo "$total_vanilla_cost $total_skill_cost" | awk '{
+    pct = ($1 > 0) ? (($2 - $1) / $1 * 100) : 0
+    printf "%.2f", pct
+  }')
+  {
+    echo "  ─────────────────────────────────────"
+    echo "  Results: ${scenario_count} scenarios"
+    printf "    Vanilla-read total cost: \$%.4f\n" "$total_vanilla_cost"
+    printf "    Pyramid-read total cost: \$%.4f  (%s%%)\n" "$total_skill_cost" "$delta_pct"
+    echo "    Vanilla-read wins: ${judge_vanilla}  |  Pyramid-read wins: ${judge_skill}  |  Tie: ${judge_tie}"
+    echo "  ─────────────────────────────────────"
+    echo ""
+    echo "STAGE_STATS:${STAGE_ID}:${scenario_count}:${total_vanilla_cost}:${total_skill_cost}:${delta_pct}:${judge_vanilla}:${judge_skill}:${judge_tie}"
+    echo ""
+  } >> "$METRICS_LOG"
+fi
