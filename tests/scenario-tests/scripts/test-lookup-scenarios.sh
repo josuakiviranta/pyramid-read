@@ -7,8 +7,8 @@ SKILL_DIR="$HOME/.claude/skills/pyramid-read"
 SKILL_BAK="${SKILL_DIR}.bak"
 
 # Defaults
-DOCS_DIR="$SCRIPT_DIR/test-specs"
-PROMPTS_DIR="$SCRIPT_DIR/tests-prompts"
+DOCS_DIR="$SCRIPT_DIR/../test-specs"
+PROMPTS_DIR="$SCRIPT_DIR/../tests-prompts"
 VERBOSE=0
 VANILLA_MODEL=sonnet
 SKILL_MODEL=sonnet
@@ -17,9 +17,9 @@ VANILLA_SUBAGENT_MODEL=""    # defaults to VANILLA_MODEL if empty
 SKILL_SUBAGENTS=""           # "" | "vanilla" | "pyramid-reader"
 SKILL_SUBAGENT_MODEL=""      # defaults to SKILL_MODEL if empty
 CUSTOM_SUBAGENT_LAUNCH_PROMPT=""
-LOGS_DIR="$SCRIPT_DIR/logs"
+LOGS_DIR="$SCRIPT_DIR/../logs"
 LOG_FILE="$LOGS_DIR/test-results-$(date +%Y-%m-%d-%H%M%S).log"
-AGENTS_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)/.claude/agents"
+AGENTS_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)/.claude/agents"
 
 usage() {
   echo "Usage: $0 [options]"
