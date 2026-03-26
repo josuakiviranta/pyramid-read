@@ -329,6 +329,10 @@ judge_skill=0
 judge_tie=0
 scenario_count=0
 
+# When NO_SKILL=1 the skill stays disabled for all scenarios; disable once here.
+# The EXIT trap (restore_skill) will restore it on finish.
+[ "$NO_SKILL" -eq 1 ] && disable_skill
+
 # ── Per-scenario loop ─────────────────────────────────────
 for prompt_file in "$PROMPTS_DIR"/*.txt; do
   [ -f "$prompt_file" ] || continue
@@ -362,7 +366,7 @@ $(get_subagent_prompt "$SKILL_SUBAGENTS")"
   echo "Prompt: \"${question}\""
 
   # ── Vanilla run (skill disabled) ──
-  disable_skill
+  [ "$NO_SKILL" -eq 0 ] && disable_skill
   [ -n "$VANILLA_SUBAGENTS" ] && patch_subagent "$VANILLA_SUBAGENTS" "$VANILLA_SUBAGENT_MODEL"
   vanilla_stream=$(run_scenario "$vanilla_prompt" "$VANILLA_MODEL")
   [ -n "$VANILLA_SUBAGENTS" ] && unpatch_subagent "$VANILLA_SUBAGENTS"
@@ -393,13 +397,8 @@ $(get_subagent_prompt "$SKILL_SUBAGENTS")"
   delta_str=$(cost_delta "$v_cost" "$s_cost")
 
   # ── Print ──
-  if [ "$NO_SKILL" -eq 1 ]; then
-    side_a_label="Side-A"
-    side_b_label="Side-B"
-  else
-    side_a_label="Vanilla-read"
-    side_b_label="Pyramid-read"
-  fi
+  side_a_label="Vanilla-read"
+  side_b_label="Pyramid-read"
   printf "  %s (%s):  in=%s  out=%s  cost=\$%.4f\n" \
     "$side_a_label" "$VANILLA_LABEL" "$(fmt_num "$v_input")" "$(fmt_num "$v_output")" "$v_cost"
   printf "  %s (%s):  in=%s  out=%s  cost=\$%.4f  %s\n" \
@@ -466,13 +465,8 @@ net_delta=$(echo "$total_vanilla_cost $total_skill_cost" | awk '{
   else                        printf "$0.0000  (equal overall)  0.00%%"
 }')
 
-if [ "$NO_SKILL" -eq 1 ]; then
-  side_a_label="Side-A"
-  side_b_label="Side-B"
-else
-  side_a_label="Vanilla-read"
-  side_b_label="Pyramid-read"
-fi
+side_a_label="Vanilla-read"
+side_b_label="Pyramid-read"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Results: ${scenario_count} scenarios"
