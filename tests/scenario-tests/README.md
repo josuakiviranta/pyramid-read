@@ -21,36 +21,51 @@ Each side is independently configurable: main agent model, optional subagents (v
 
 ## Usage
 
+### Stage scripts (recommended)
+
+Six pre-configured stage scripts live in `scripts/`. Run them directly or use the harness to run all six sequentially:
+
+```bash
+# Run all 6 stages (forwards any extra flags to each stage)
+./scripts/run-all-stages.sh
+./scripts/run-all-stages.sh --docs-dir /path/to/docs
+
+# Individual stages
+./scripts/stage-1a-skill-sonnet-vs-vanilla-sonnet.sh        # skill vs no-skill, same model
+./scripts/stage-1b-skill-haiku-vs-vanilla-sonnet.sh         # haiku+skill vs vanilla sonnet
+./scripts/stage-2a-pr-subs-sonnet-vs-vanilla-subs-sonnet.sh # PR-subs vs vanilla-subs (sonnet, no skill)
+./scripts/stage-2b-pr-subs-haiku-vs-vanilla-subs-haiku.sh   # PR-subs vs vanilla-subs (haiku, no skill)
+./scripts/stage-3a-skill-pr-subs-sonnet-vs-vanilla-subs-sonnet.sh  # full combo, sonnet
+./scripts/stage-3b-skill-pr-subs-haiku-vs-vanilla-subs-haiku.sh    # full combo, haiku
+```
+
+### Direct runner
+
 ```bash
 # Default: uses test-specs/ as docs, tests-prompts/ as prompts, both sides on sonnet
-./test-lookup-scenarios.sh
+./scripts/test-lookup-scenarios.sh
 
 # Custom docs and prompts directories
-./test-lookup-scenarios.sh --docs-dir /path/to/your/docs
-./test-lookup-scenarios.sh --prompts-dir /path/to/prompts
+./scripts/test-lookup-scenarios.sh --docs-dir /path/to/your/docs
+./scripts/test-lookup-scenarios.sh --prompts-dir /path/to/prompts
 
 # Run both sides on haiku (cheaper, faster)
-./test-lookup-scenarios.sh --haiku
+./scripts/test-lookup-scenarios.sh --haiku
 
 # Set main models individually
-./test-lookup-scenarios.sh --vanilla-model haiku --skill-model sonnet
+./scripts/test-lookup-scenarios.sh --vanilla-model haiku --skill-model sonnet
 
 # pyramid-reader subagents (haiku) on the skill side vs plain vanilla
-./test-lookup-scenarios.sh --skill-subagents pyramid-reader --skill-subagent-model haiku
+./scripts/test-lookup-scenarios.sh --skill-subagents pyramid-reader --skill-subagent-model haiku
 
-# vanilla main + pyramid-reader subagents vs skill main + vanilla subagents, both on haiku
-./test-lookup-scenarios.sh \
-  --haiku \
-  --vanilla-subagents pyramid-reader \
-  --skill-subagents vanilla
-
-# Override the instruction appended to the prompt when subagents are enabled
-./test-lookup-scenarios.sh \
-  --skill-subagents pyramid-reader \
-  --subagent-launch-prompt "Delegate this lookup to a pyramid-reader subagent."
+# Compare subagent types with skill disabled on both sides
+./scripts/test-lookup-scenarios.sh \
+  --no-skill \
+  --vanilla-subagents vanilla \
+  --skill-subagents pyramid-reader
 
 # Verbose: shows full claude output
-./test-lookup-scenarios.sh --verbose
+./scripts/test-lookup-scenarios.sh --verbose
 ```
 
 ### All flags
@@ -67,6 +82,7 @@ Each side is independently configurable: main agent model, optional subagents (v
 | `--skill-subagents TYPE` | — | Enable subagents on skill side: `vanilla` or `pyramid-reader` |
 | `--skill-subagent-model M` | skill model | Model for skill side subagents |
 | `--subagent-launch-prompt T` | type-dependent | Override instruction appended to prompt when subagents are enabled |
+| `--no-skill` | — | Disable skill on both sides (for subagent-type comparisons) |
 | `--verbose` | — | Show full claude output |
 
 ## Adding Scenarios
