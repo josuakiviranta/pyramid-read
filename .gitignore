@@ -11,3 +11,4 @@ docs/
 specs/
 tests/scenario-tests/balancer-prompts/
 tests/scenario-tests/logs/
+.worktrees/
