@@ -29,6 +29,7 @@ Six pre-configured stage scripts live in `scripts/`. Run them directly or use th
 # Run all 6 stages (forwards any extra flags to each stage)
 ./scripts/run-all-stages.sh
 ./scripts/run-all-stages.sh --docs-dir /path/to/docs
+./scripts/run-all-stages.sh --docs-dir /path/to/docs --prompts-dir /path/to/prompts
 
 # Individual stages
 ./scripts/stage-1a-skill-sonnet-vs-vanilla-sonnet.sh        # skill vs no-skill, same model
