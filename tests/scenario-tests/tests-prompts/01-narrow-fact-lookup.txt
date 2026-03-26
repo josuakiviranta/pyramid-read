@@ -1,1 +1,1 @@
-What are the exact HTTP endpoints for creating and deleting todos? Include the method, path, request body shape, and response shape for each.
+what endpoints do i use to create and delete a todo

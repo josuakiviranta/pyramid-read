@@ -1,1 +1,1 @@
-What is the full data model for a todo item, and which frontend components are responsible for rendering and mutating it?
+what does a todo item look like and what renders it on screen

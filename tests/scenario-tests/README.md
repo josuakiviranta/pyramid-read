@@ -5,12 +5,12 @@ Compares Claude's documentation lookup quality and cost with vs without the pyra
 ## What It Tests
 
 For each scenario prompt, the runner:
-1. Disables the pyramid-read skill (vanilla mode, Bash allowed)
-2. Runs `claude -p` and records response + cost
-3. Re-enables the skill
-4. Runs the same prompt again and records response + cost
-5. Calls an LLM judge to pick the better response
-6. Reports cost delta and judge verdict
+1. Runs the **vanilla-read** side (skill disabled) and records response + cost
+2. Runs the **pyramid-read** side (skill enabled) and records response + cost
+3. Calls an LLM judge to pick the better response (accuracy, completeness, relevance)
+4. Reports cost delta, percentage difference, and judge verdict
+
+Each side is independently configurable: main agent model, optional subagents (vanilla or pyramid-reader type), and subagent model.
 
 ## Prerequisites
 
@@ -22,18 +22,52 @@ For each scenario prompt, the runner:
 ## Usage
 
 ```bash
-# Default: uses loop-lab specs/ as docs
+# Default: uses test-specs/ as docs, tests-prompts/ as prompts, both sides on sonnet
 ./test-lookup-scenarios.sh
 
-# Custom docs directory
+# Custom docs and prompts directories
 ./test-lookup-scenarios.sh --docs-dir /path/to/your/docs
-
-# Custom prompts directory
 ./test-lookup-scenarios.sh --prompts-dir /path/to/prompts
+
+# Run both sides on haiku (cheaper, faster)
+./test-lookup-scenarios.sh --haiku
+
+# Set main models individually
+./test-lookup-scenarios.sh --vanilla-model haiku --skill-model sonnet
+
+# pyramid-reader subagents (haiku) on the skill side vs plain vanilla
+./test-lookup-scenarios.sh --skill-subagents pyramid-reader --skill-subagent-model haiku
+
+# vanilla main + pyramid-reader subagents vs skill main + vanilla subagents, both on haiku
+./test-lookup-scenarios.sh \
+  --haiku \
+  --vanilla-subagents pyramid-reader \
+  --skill-subagents vanilla
+
+# Override the instruction appended to the prompt when subagents are enabled
+./test-lookup-scenarios.sh \
+  --skill-subagents pyramid-reader \
+  --subagent-launch-prompt "Delegate this lookup to a pyramid-reader subagent."
 
 # Verbose: shows full claude output
 ./test-lookup-scenarios.sh --verbose
 ```
+
+### All flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--docs-dir PATH` | `test-specs/` | Directory with markdown docs |
+| `--prompts-dir PATH` | `tests-prompts/` | Directory with scenario `.txt` files |
+| `--vanilla-model MODEL` | `sonnet` | Main agent model for vanilla-read side |
+| `--skill-model MODEL` | `sonnet` | Main agent model for pyramid-read side |
+| `--haiku` | — | Shorthand: set both main models to haiku |
+| `--vanilla-subagents TYPE` | — | Enable subagents on vanilla side: `vanilla` or `pyramid-reader` |
+| `--vanilla-subagent-model M` | vanilla model | Model for vanilla side subagents |
+| `--skill-subagents TYPE` | — | Enable subagents on skill side: `vanilla` or `pyramid-reader` |
+| `--skill-subagent-model M` | skill model | Model for skill side subagents |
+| `--subagent-launch-prompt T` | type-dependent | Override instruction appended to prompt when subagents are enabled |
+| `--verbose` | — | Show full claude output |
 
 ## Adding Scenarios
 
@@ -44,11 +78,32 @@ Add a `.txt` file to `tests-prompts/`. The filename (without `.txt`) becomes the
 Per-scenario:
 ```
 ━━━ 01-narrow-fact-lookup ━━━
-  Vanilla:       in=2,847  out=312  cost=$0.0094
-  Pyramid-read:  in=891    out=287  cost=$0.0070  (Δ -$0.0024 cheaper)
-  Judge:         PYRAMID-READ — "More targeted answer, found the exact section"
+Prompt: "what endpoints do i use to create and delete a todo"
+  Vanilla-read (sonnet):                        in=2,847  out=312  cost=$0.0094
+  Pyramid-read (haiku [pyramid-reader subs: haiku]):  in=891  out=287  cost=$0.0070  (Δ -$0.0024 cheaper) -25.53%
+  LLM-judge:     Pyramid-read win - "More targeted answer, found the exact section"
 ```
 
-Final summary shows total costs, cost breakdown by direction, and judge win counts.
+Final summary:
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Results: 4 scenarios
+  Vanilla-read total cost: $0.0376
+  Pyramid-read total cost: $0.0280
+  Net delta:               -$0.0096  (pyramid-read cheaper overall)  -25.53%
 
-A full log with both responses per scenario is saved as `test-results-YYYY-MM-DD-HHMMSS.log`.
+  Cost breakdown:
+    pyramid-read cheaper:  3 scenarios
+    pyramid-read costlier: 1 scenarios
+    equal:                 0 scenarios
+
+  LLM-judge -> accuracy, completeness, and relevance:
+    Pyramid-read wins:  3 scenarios
+    Vanilla-read wins:  0 scenarios
+    Tie:                1 scenarios
+
+  Log: .../logs/test-results-2026-03-26-120000.log
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+Full responses for both sides per scenario are saved to `logs/test-results-YYYY-MM-DD-HHMMSS.log`.

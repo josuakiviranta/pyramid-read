@@ -10,38 +10,93 @@ SKILL_BAK="${SKILL_DIR}.bak"
 DOCS_DIR="$SCRIPT_DIR/test-specs"
 PROMPTS_DIR="$SCRIPT_DIR/tests-prompts"
 VERBOSE=0
-LOG_FILE="$SCRIPT_DIR/test-results-$(date +%Y-%m-%d-%H%M%S).log"
+VANILLA_MODEL=sonnet
+SKILL_MODEL=sonnet
+VANILLA_SUBAGENTS=""         # "" | "vanilla" | "pyramid-reader"
+VANILLA_SUBAGENT_MODEL=""    # defaults to VANILLA_MODEL if empty
+SKILL_SUBAGENTS=""           # "" | "vanilla" | "pyramid-reader"
+SKILL_SUBAGENT_MODEL=""      # defaults to SKILL_MODEL if empty
+CUSTOM_SUBAGENT_LAUNCH_PROMPT=""
+LOGS_DIR="$SCRIPT_DIR/logs"
+LOG_FILE="$LOGS_DIR/test-results-$(date +%Y-%m-%d-%H%M%S).log"
+AGENTS_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)/.claude/agents"
 
 usage() {
-  echo "Usage: $0 [--docs-dir PATH] [--prompts-dir PATH] [--verbose]"
-  echo "  --docs-dir     Directory with markdown docs (default: specs/)"
-  echo "  --prompts-dir  Directory with scenario .txt files (default: tests-prompts/)"
-  echo "  --verbose      Show full claude output"
+  echo "Usage: $0 [options]"
+  echo "  --docs-dir                  Directory with markdown docs (default: test-specs/)"
+  echo "  --prompts-dir               Directory with scenario .txt files (default: tests-prompts/)"
+  echo "  --vanilla-model MODEL       Model for vanilla-read run (default: sonnet)"
+  echo "  --skill-model MODEL         Model for pyramid-read run (default: sonnet)"
+  echo "  --haiku                     Shorthand: set both main models to haiku"
+  echo "  --vanilla-subagents TYPE    Enable subagents for vanilla side: vanilla|pyramid-reader"
+  echo "  --vanilla-subagent-model M  Model for vanilla side subagents (default: vanilla model)"
+  echo "  --skill-subagents TYPE      Enable subagents for skill side: vanilla|pyramid-reader"
+  echo "  --skill-subagent-model M    Model for skill side subagents (default: skill model)"
+  echo "  --subagent-launch-prompt T  Override subagent instruction appended to prompt"
+  echo "  --verbose                   Show full claude output"
   exit "${1:-1}"
 }
 
 # Parse args
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --docs-dir)    DOCS_DIR="$2"; shift 2 ;;
-    --prompts-dir) PROMPTS_DIR="$2"; shift 2 ;;
-    --verbose)     VERBOSE=1; shift ;;
-    -h|--help)     usage 0 ;;
+    --docs-dir)                 DOCS_DIR="$2"; shift 2 ;;
+    --prompts-dir)              PROMPTS_DIR="$2"; shift 2 ;;
+    --vanilla-model)            VANILLA_MODEL="$2"; shift 2 ;;
+    --skill-model)              SKILL_MODEL="$2"; shift 2 ;;
+    --haiku)                    VANILLA_MODEL=haiku; SKILL_MODEL=haiku; shift ;;
+    --vanilla-subagents)        VANILLA_SUBAGENTS="$2"; shift 2 ;;
+    --vanilla-subagent-model)   VANILLA_SUBAGENT_MODEL="$2"; shift 2 ;;
+    --skill-subagents)          SKILL_SUBAGENTS="$2"; shift 2 ;;
+    --skill-subagent-model)     SKILL_SUBAGENT_MODEL="$2"; shift 2 ;;
+    --subagent-launch-prompt)   CUSTOM_SUBAGENT_LAUNCH_PROMPT="$2"; shift 2 ;;
+    --verbose)                  VERBOSE=1; shift ;;
+    -h|--help)                  usage 0 ;;
     *) echo "Unknown option: $1"; usage ;;
   esac
 done
+
+# Resolve subagent model defaults and config labels
+VANILLA_SUBAGENT_MODEL="${VANILLA_SUBAGENT_MODEL:-$VANILLA_MODEL}"
+SKILL_SUBAGENT_MODEL="${SKILL_SUBAGENT_MODEL:-$SKILL_MODEL}"
+
+build_config_label() {
+  local main_model="$1" sub_type="$2" sub_model="$3"
+  if [ -n "$sub_type" ]; then
+    printf "%s [%s subs: %s]" "$main_model" "$sub_type" "$sub_model"
+  else
+    printf "%s" "$main_model"
+  fi
+}
+
+VANILLA_LABEL=$(build_config_label "$VANILLA_MODEL" "$VANILLA_SUBAGENTS" "$VANILLA_SUBAGENT_MODEL")
+SKILL_LABEL=$(build_config_label "$SKILL_MODEL" "$SKILL_SUBAGENTS" "$SKILL_SUBAGENT_MODEL")
+
+get_subagent_prompt() {
+  local sub_type="$1"
+  if [ -n "$CUSTOM_SUBAGENT_LAUNCH_PROMPT" ]; then
+    echo "$CUSTOM_SUBAGENT_LAUNCH_PROMPT"
+  elif [ "$sub_type" = "pyramid-reader" ]; then
+    echo "Use a pyramid-reader subagent for this lookup task."
+  elif [ "$sub_type" = "vanilla" ]; then
+    echo "Use a vanilla-subagent subagent for this lookup task."
+  fi
+}
 
 # Validate
 [ -d "$DOCS_DIR" ]    || { echo "Error: docs dir not found: $DOCS_DIR"; exit 1; }
 [ -d "$PROMPTS_DIR" ] || { echo "Error: prompts dir not found: $PROMPTS_DIR"; exit 1; }
 [ -d "$SKILL_DIR" ]   || { echo "Error: pyramid-read skill not found at $SKILL_DIR"; exit 1; }
+mkdir -p "$LOGS_DIR"
 
 prompts=("$PROMPTS_DIR"/*.txt)
 [ ${#prompts[@]} -gt 0 ] && [ -f "${prompts[0]}" ] || { echo "Error: no .txt files in $PROMPTS_DIR"; exit 1; }
 
-echo "Docs:    $DOCS_DIR"
-echo "Prompts: $PROMPTS_DIR (${#prompts[@]} scenarios)"
-echo "Log:     $LOG_FILE"
+echo "Docs:          $DOCS_DIR"
+echo "Prompts:       $PROMPTS_DIR (${#prompts[@]} scenarios)"
+echo "Vanilla-read:  $VANILLA_LABEL"
+echo "Pyramid-read:  $SKILL_LABEL"
+echo "Log:           $LOG_FILE"
 echo ""
 
 restore_skill() {
@@ -65,9 +120,41 @@ enable_skill() {
   restore_skill
 }
 
-# run_scenario <prompt_text> → prints path to stream-json temp file
+# patch_subagent <sub_type> <model>
+# Modifies agent files so the named subagent type uses the given model.
+patch_subagent() {
+  local sub_type="$1"
+  local model="$2"
+  local agent_file="$AGENTS_DIR/${sub_type}.md"
+
+  if [ "$sub_type" = "pyramid-reader" ]; then
+    cp "$agent_file" "${agent_file}.bak"
+    # Insert "model: MODEL" as the second line of the frontmatter (after opening ---)
+    awk -v m="$model" 'NR==1 && /^---$/ { print; print "model: " m; next } { print }' \
+      "${agent_file}.bak" > "$agent_file"
+  elif [ "$sub_type" = "vanilla" ]; then
+    # Create a minimal vanilla subagent agent file
+    printf -- '---\nname: vanilla-subagent\nmodel: %s\ntools: Read,Glob,Grep\n---\nRead documentation files to answer questions. Use the Read, Glob, and Grep tools. Load only what is relevant.\n' \
+      "$model" > "$agent_file"
+  fi
+}
+
+# unpatch_subagent <sub_type>
+unpatch_subagent() {
+  local sub_type="$1"
+  local agent_file="$AGENTS_DIR/${sub_type}.md"
+
+  if [ "$sub_type" = "pyramid-reader" ] && [ -f "${agent_file}.bak" ]; then
+    mv "${agent_file}.bak" "$agent_file"
+  elif [ "$sub_type" = "vanilla" ] && [ -f "$agent_file" ]; then
+    rm -f "$agent_file"
+  fi
+}
+
+# run_scenario <prompt_text> <model> → prints path to stream-json temp file
 run_scenario() {
   local prompt="$1"
+  local model="$2"
   local stream_file stderr_file exit_code=0
   stream_file=$(mktemp)
   stderr_file=$(mktemp)
@@ -75,7 +162,7 @@ run_scenario() {
   printf '%s' "$prompt" | claude -p \
     --dangerously-skip-permissions \
     --output-format=stream-json \
-    --model sonnet \
+    --model "$model" \
     > "$stream_file" 2>"$stderr_file" || exit_code=$?
 
   if [ "$exit_code" -ne 0 ]; then
@@ -168,10 +255,10 @@ format_verdict() {
   local winner="$1"
   local reason="$2"
   case "$winner" in
-    A)       echo "VANILLA — \"${reason}\"" ;;
-    B)       echo "PYRAMID-READ — \"${reason}\"" ;;
-    TIE)     echo "TIE — \"${reason}\"" ;;
-    *)       echo "UNKNOWN — \"${reason}\"" ;;
+    A)       echo "Vanilla-read win - \"${reason}\"" ;;
+    B)       echo "Pyramid-read win - \"${reason}\"" ;;
+    TIE)     echo "TIE - \"${reason}\"" ;;
+    *)       echo "UNKNOWN - \"${reason}\"" ;;
   esac
 }
 
@@ -179,9 +266,10 @@ format_verdict() {
 cost_delta() {
   echo "$1 $2" | awk '{
     delta = $2 - $1
-    if (delta > 0.000001)       printf "(Δ +$%.4f costlier)", delta
-    else if (delta < -0.000001) printf "(Δ -$%.4f cheaper)", -delta
-    else                        printf "(Δ $0.0000 equal)"
+    pct = ($1 > 0) ? (delta / $1 * 100) : 0
+    if (delta > 0.000001)       printf "(Δ +$%.4f costlier) %+.2f%%", delta, pct
+    else if (delta < -0.000001) printf "(Δ -$%.4f cheaper) %.2f%%", -delta, pct
+    else                        printf "(Δ $0.0000 equal) 0.00%%"
   }'
 }
 
@@ -207,17 +295,37 @@ for prompt_file in "$PROMPTS_DIR"/*.txt; do
   scenario_name=$(basename "$prompt_file" .txt)
   question=$(cat "$prompt_file")
 
-  full_prompt="You have access to markdown documentation files in: ${DOCS_DIR}
+  base_prompt="You have access to markdown documentation files in: ${DOCS_DIR}
 
 Answer the following question using only the documentation in that directory:
 
 ${question}"
 
+  # Append subagent instructions if enabled for each side
+  if [ -n "$VANILLA_SUBAGENTS" ]; then
+    vanilla_prompt="${base_prompt}
+
+$(get_subagent_prompt "$VANILLA_SUBAGENTS")"
+  else
+    vanilla_prompt="$base_prompt"
+  fi
+
+  if [ -n "$SKILL_SUBAGENTS" ]; then
+    skill_prompt="${base_prompt}
+
+$(get_subagent_prompt "$SKILL_SUBAGENTS")"
+  else
+    skill_prompt="$base_prompt"
+  fi
+
   echo "━━━ ${scenario_name} ━━━"
+  echo "Prompt: \"${question}\""
 
   # ── Vanilla run (skill disabled) ──
   disable_skill
-  vanilla_stream=$(run_scenario "$full_prompt")
+  [ -n "$VANILLA_SUBAGENTS" ] && patch_subagent "$VANILLA_SUBAGENTS" "$VANILLA_SUBAGENT_MODEL"
+  vanilla_stream=$(run_scenario "$vanilla_prompt" "$VANILLA_MODEL")
+  [ -n "$VANILLA_SUBAGENTS" ] && unpatch_subagent "$VANILLA_SUBAGENTS"
   enable_skill
   extract_metrics "$vanilla_stream"
   v_cost="$METRIC_COST"
@@ -227,7 +335,9 @@ ${question}"
   rm -f "$vanilla_stream"
 
   # ── Skill run ──
-  skill_stream=$(run_scenario "$full_prompt")
+  [ -n "$SKILL_SUBAGENTS" ] && patch_subagent "$SKILL_SUBAGENTS" "$SKILL_SUBAGENT_MODEL"
+  skill_stream=$(run_scenario "$skill_prompt" "$SKILL_MODEL")
+  [ -n "$SKILL_SUBAGENTS" ] && unpatch_subagent "$SKILL_SUBAGENTS"
   extract_metrics "$skill_stream"
   s_cost="$METRIC_COST"
   s_input="$METRIC_INPUT"
@@ -243,24 +353,26 @@ ${question}"
   delta_str=$(cost_delta "$v_cost" "$s_cost")
 
   # ── Print ──
-  printf "  Vanilla:       in=%s  out=%s  cost=\$%.4f\n" \
-    "$(fmt_num "$v_input")" "$(fmt_num "$v_output")" "$v_cost"
-  printf "  Pyramid-read:  in=%s  out=%s  cost=\$%.4f  %s\n" \
-    "$(fmt_num "$s_input")" "$(fmt_num "$s_output")" "$s_cost" "$delta_str"
-  echo "  Judge:         ${verdict}"
+  printf "  Vanilla-read (%s):  in=%s  out=%s  cost=\$%.4f\n" \
+    "$VANILLA_LABEL" "$(fmt_num "$v_input")" "$(fmt_num "$v_output")" "$v_cost"
+  printf "  Pyramid-read (%s):  in=%s  out=%s  cost=\$%.4f  %s\n" \
+    "$SKILL_LABEL" "$(fmt_num "$s_input")" "$(fmt_num "$s_output")" "$s_cost" "$delta_str"
+  echo "  LLM-judge:     ${verdict}"
   echo ""
 
   # ── Log ──
   {
     echo "━━━ ${scenario_name} ━━━"
+    echo "Prompt: \"${question}\""
+    echo ""
     echo "VANILLA RESPONSE:"
     echo "$v_response"
     echo ""
-    echo "SKILL RESPONSE:"
+    echo "PYRAMID-READ RESPONSE:"
     echo "$s_response"
     echo ""
-    echo "METRICS: vanilla cost=\$${v_cost} in=${v_input} out=${v_output}"
-    echo "METRICS: skill   cost=\$${s_cost} in=${s_input} out=${s_output}"
+    echo "METRICS: vanilla-read (${VANILLA_LABEL}) cost=\$${v_cost} in=${v_input} out=${v_output}"
+    echo "METRICS: pyramid-read (${SKILL_LABEL}) cost=\$${s_cost} in=${s_input} out=${s_output}"
     echo "JUDGE: $verdict"
     echo ""
   } >> "$LOG_FILE"
@@ -288,14 +400,15 @@ done
 # ── Summary ───────────────────────────────────────────────
 net_delta=$(echo "$total_vanilla_cost $total_skill_cost" | awk '{
   delta = $2 - $1
-  if (delta > 0.000001)       printf "+$%.4f  (pyramid-read costlier overall)", delta
-  else if (delta < -0.000001) printf "-$%.4f  (pyramid-read cheaper overall)", -delta
-  else                        printf "$0.0000  (equal overall)"
+  pct = ($1 > 0) ? (delta / $1 * 100) : 0
+  if (delta > 0.000001)       printf "+$%.4f  (pyramid-read costlier overall)  %+.2f%%", delta, pct
+  else if (delta < -0.000001) printf "-$%.4f  (pyramid-read cheaper overall)  %.2f%%", -delta, pct
+  else                        printf "$0.0000  (equal overall)  0.00%%"
 }')
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Results: ${scenario_count} scenarios"
-printf "  Vanilla total cost:      \$%.4f\n" "$total_vanilla_cost"
+printf "  Vanilla-read total cost: \$%.4f\n" "$total_vanilla_cost"
 printf "  Pyramid-read total cost: \$%.4f\n" "$total_skill_cost"
 echo "  Net delta:               ${net_delta}"
 echo ""
@@ -304,6 +417,10 @@ echo "    pyramid-read cheaper:  ${cheaper_count} scenarios"
 echo "    pyramid-read costlier: ${costlier_count} scenarios"
 echo "    equal:                 ${equal_count} scenarios"
 echo ""
-echo "  Judge:  pyramid-read ${judge_skill} / vanilla ${judge_vanilla} / tie ${judge_tie}"
+echo "  LLM-judge -> accuracy, completeness, and relevance:"
+echo "    Pyramid-read wins:  ${judge_skill} scenarios"
+echo "    Vanilla-read wins:  ${judge_vanilla} scenarios"
+echo "    Tie:                ${judge_tie} scenarios"
+echo ""
 echo "  Log: ${LOG_FILE}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
