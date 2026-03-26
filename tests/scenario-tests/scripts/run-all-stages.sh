@@ -5,10 +5,12 @@ set -euo pipefail
 export LC_NUMERIC=C
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOGS_DIR="$SCRIPT_DIR/../logs"
-mkdir -p "$LOGS_DIR"
-SUMMARY_FILE="$LOGS_DIR/run-all-$(date +%Y-%m-%d-%H%M%S).summary"
+RUN_DIR="$LOGS_DIR/run-$(date +%Y-%m-%d-%H%M%S)"
+mkdir -p "$RUN_DIR"
+SUMMARY_FILE="$RUN_DIR/run-all.summary"
 
-echo "Summary: $SUMMARY_FILE"
+echo "Run dir:  $RUN_DIR"
+echo "Summary:  $SUMMARY_FILE"
 
 run_stage() {
   local num="$1" label="$2" script="$3"
@@ -17,7 +19,7 @@ run_stage() {
   echo "════════════════════════════════════════════════"
   echo "  STAGE ${num}: ${label}"
   echo "════════════════════════════════════════════════"
-  "$SCRIPT_DIR/$script" --metrics-log "$SUMMARY_FILE" --stage-id "$num" "$@"
+  "$SCRIPT_DIR/$script" --metrics-log "$SUMMARY_FILE" --stage-id "$num" --logs-dir "$RUN_DIR" "$@"
 }
 
 run_stage "1a" "Skill (sonnet) vs Vanilla (sonnet) — no subagents" \
@@ -68,4 +70,5 @@ table=$(
 echo "$table"
 echo "$table" >> "$SUMMARY_FILE"
 echo ""
-echo "Summary: $SUMMARY_FILE"
+echo "Run dir:  $RUN_DIR"
+echo "Summary:  $SUMMARY_FILE"

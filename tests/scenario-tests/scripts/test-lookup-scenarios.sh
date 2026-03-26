@@ -21,7 +21,6 @@ NO_SKILL=0
 METRICS_LOG=""
 STAGE_ID=""
 LOGS_DIR="$SCRIPT_DIR/../logs"
-LOG_FILE="$LOGS_DIR/test-results-$(date +%Y-%m-%d-%H%M%S).log"
 AGENTS_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)/.claude/agents"
 
 usage() {
@@ -37,6 +36,7 @@ usage() {
   echo "  --skill-subagent-model M    Model for skill side subagents (default: skill model)"
   echo "  --subagent-launch-prompt T  Override subagent instruction appended to prompt"
   echo "  --no-skill                  Disable skill on both sides (for subagent-type comparison)"
+  echo "  --logs-dir PATH             Directory for log files (default: logs/ next to scripts/)"
   echo "  --metrics-log FILE          Append metrics-only output to FILE (used by run-all-stages.sh)"
   echo "  --stage-id ID               Stage identifier written to metrics log (e.g. 1a)"
   echo "  --verbose                   Show full claude output"
@@ -57,6 +57,7 @@ while [[ $# -gt 0 ]]; do
     --skill-subagent-model)     SKILL_SUBAGENT_MODEL="$2"; shift 2 ;;
     --subagent-launch-prompt)   CUSTOM_SUBAGENT_LAUNCH_PROMPT="$2"; shift 2 ;;
     --no-skill)                 NO_SKILL=1; shift ;;
+    --logs-dir)                 LOGS_DIR="$2"; shift 2 ;;
     --metrics-log)              METRICS_LOG="$2"; shift 2 ;;
     --stage-id)                 STAGE_ID="$2"; shift 2 ;;
     --verbose)                  VERBOSE=1; shift ;;
@@ -64,6 +65,8 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown option: $1"; usage ;;
   esac
 done
+
+LOG_FILE="$LOGS_DIR/test-results-$(date +%Y-%m-%d-%H%M%S).log"
 
 # Resolve subagent model defaults and config labels
 VANILLA_SUBAGENT_MODEL="${VANILLA_SUBAGENT_MODEL:-$VANILLA_MODEL}"
@@ -86,7 +89,7 @@ get_subagent_prompt() {
   if [ -n "$CUSTOM_SUBAGENT_LAUNCH_PROMPT" ]; then
     echo "$CUSTOM_SUBAGENT_LAUNCH_PROMPT"
   elif [ "$sub_type" = "pyramid-reader" ]; then
-    echo "Use a pyramid-reader subagent for this lookup task."
+    echo "Use a pyramid-reader subagent for this lookup task. After the subagent returns its findings, synthesize them into a direct answer to the question above."
   elif [ "$sub_type" = "vanilla" ]; then
     echo "Use a vanilla-subagent subagent for this lookup task."
   fi
@@ -117,6 +120,7 @@ if [ -n "$METRICS_LOG" ]; then
     echo "Prompts:      $PROMPTS_DIR"
     echo "Vanilla-read: $VANILLA_LABEL"
     echo "Pyramid-read: $SKILL_LABEL"
+    echo "Log:          $LOG_FILE"
     echo ""
   } >> "$METRICS_LOG"
 fi
@@ -388,6 +392,22 @@ $(get_subagent_prompt "$SKILL_SUBAGENTS")"
   s_output="$METRIC_OUTPUT"
   s_response="$METRIC_RESPONSE"
   rm -f "$skill_stream"
+
+  # Retry once if the model returned the empty-message fallback (non-deterministic
+  # behaviour after Agent tool_result where Claude mistakes a system-reminder
+  # injection for an empty user message).
+  if printf '%s' "$s_response" | grep -qi "came through empty\|what would you like help with"; then
+    echo "  [RETRY] Pyramid-read got empty-message fallback, retrying once..." >&2
+    [ -n "$SKILL_SUBAGENTS" ] && patch_subagent "$SKILL_SUBAGENTS" "$SKILL_SUBAGENT_MODEL"
+    skill_stream=$(run_scenario "$skill_prompt" "$SKILL_MODEL")
+    [ -n "$SKILL_SUBAGENTS" ] && unpatch_subagent "$SKILL_SUBAGENTS"
+    extract_metrics "$skill_stream"
+    s_cost="$METRIC_COST"
+    s_input="$METRIC_INPUT"
+    s_output="$METRIC_OUTPUT"
+    s_response="$METRIC_RESPONSE"
+    rm -f "$skill_stream"
+  fi
 
   # ── Judge ──
   run_judge "$DOCS_DIR" "$question" "$v_response" "$s_response"
