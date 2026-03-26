@@ -22,6 +22,7 @@ METRICS_LOG=""
 STAGE_ID=""
 LOGS_DIR="$SCRIPT_DIR/../logs"
 AGENTS_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)/.claude/agents"
+SESSIONS_DIR="$HOME/.claude/projects/$(echo "$SCRIPT_DIR" | sed 's|/|-|g')"
 
 usage() {
   echo "Usage: $0 [options]"
@@ -177,26 +178,32 @@ unpatch_subagent() {
   fi
 }
 
-# run_scenario <prompt_text> <model> → prints path to stream-json temp file
+# run_scenario <prompt_text> <model>
+# Sets LAST_STREAM_FILE to the stream-json temp file and LAST_SESSION_FILE to
+# the .jsonl session created by this run. Must NOT be called via $() subshell
+# or the globals won't propagate back to the caller.
+LAST_STREAM_FILE=""
+LAST_SESSION_FILE=""
 run_scenario() {
   local prompt="$1"
   local model="$2"
-  local stream_file stderr_file exit_code=0
-  stream_file=$(mktemp)
+  local stderr_file exit_code=0
+  LAST_STREAM_FILE=$(mktemp)
   stderr_file=$(mktemp)
 
   printf '%s' "$prompt" | claude -p \
     --dangerously-skip-permissions \
     --output-format=stream-json \
     --model "$model" \
-    > "$stream_file" 2>"$stderr_file" || exit_code=$?
+    > "$LAST_STREAM_FILE" 2>"$stderr_file" || exit_code=$?
+
+  LAST_SESSION_FILE=$(ls -t "$SESSIONS_DIR"/*.jsonl 2>/dev/null | head -1 || true)
 
   if [ "$exit_code" -ne 0 ]; then
     echo "  [WARNING] claude exited with code $exit_code" >&2
     [ -s "$stderr_file" ] && cat "$stderr_file" >&2
   fi
   rm -f "$stderr_file"
-  echo "$stream_file"
 }
 
 # extract_metrics <stream_file> → sets METRIC_COST, METRIC_INPUT, METRIC_OUTPUT, METRIC_RESPONSE
@@ -325,6 +332,10 @@ fmt_num() {
 # ── Accumulators ──────────────────────────────────────────
 total_vanilla_cost=0
 total_skill_cost=0
+total_vanilla_input=0
+total_vanilla_output=0
+total_skill_input=0
+total_skill_output=0
 cheaper_count=0
 costlier_count=0
 equal_count=0
@@ -372,7 +383,9 @@ $(get_subagent_prompt "$SKILL_SUBAGENTS")"
   # ── Vanilla run (skill disabled) ──
   [ "$NO_SKILL" -eq 0 ] && disable_skill
   [ -n "$VANILLA_SUBAGENTS" ] && patch_subagent "$VANILLA_SUBAGENTS" "$VANILLA_SUBAGENT_MODEL"
-  vanilla_stream=$(run_scenario "$vanilla_prompt" "$VANILLA_MODEL")
+  run_scenario "$vanilla_prompt" "$VANILLA_MODEL"
+  vanilla_stream="$LAST_STREAM_FILE"
+  v_session="$LAST_SESSION_FILE"
   [ -n "$VANILLA_SUBAGENTS" ] && unpatch_subagent "$VANILLA_SUBAGENTS"
   [ "$NO_SKILL" -eq 0 ] && enable_skill
   extract_metrics "$vanilla_stream"
@@ -384,7 +397,9 @@ $(get_subagent_prompt "$SKILL_SUBAGENTS")"
 
   # ── Skill run ──
   [ -n "$SKILL_SUBAGENTS" ] && patch_subagent "$SKILL_SUBAGENTS" "$SKILL_SUBAGENT_MODEL"
-  skill_stream=$(run_scenario "$skill_prompt" "$SKILL_MODEL")
+  run_scenario "$skill_prompt" "$SKILL_MODEL"
+  skill_stream="$LAST_STREAM_FILE"
+  s_session="$LAST_SESSION_FILE"
   [ -n "$SKILL_SUBAGENTS" ] && unpatch_subagent "$SKILL_SUBAGENTS"
   extract_metrics "$skill_stream"
   s_cost="$METRIC_COST"
@@ -399,7 +414,9 @@ $(get_subagent_prompt "$SKILL_SUBAGENTS")"
   if printf '%s' "$s_response" | grep -qi "came through empty\|what would you like help with"; then
     echo "  [RETRY] Pyramid-read got empty-message fallback, retrying once..." >&2
     [ -n "$SKILL_SUBAGENTS" ] && patch_subagent "$SKILL_SUBAGENTS" "$SKILL_SUBAGENT_MODEL"
-    skill_stream=$(run_scenario "$skill_prompt" "$SKILL_MODEL")
+    run_scenario "$skill_prompt" "$SKILL_MODEL"
+    skill_stream="$LAST_STREAM_FILE"
+    s_session="$LAST_SESSION_FILE"
     [ -n "$SKILL_SUBAGENTS" ] && unpatch_subagent "$SKILL_SUBAGENTS"
     extract_metrics "$skill_stream"
     s_cost="$METRIC_COST"
@@ -424,6 +441,8 @@ $(get_subagent_prompt "$SKILL_SUBAGENTS")"
   printf "  %s (%s):  in=%s  out=%s  cost=\$%.4f  %s\n" \
     "$side_b_label" "$SKILL_LABEL" "$(fmt_num "$s_input")" "$(fmt_num "$s_output")" "$s_cost" "$delta_str"
   echo "  LLM-judge:     ${verdict}"
+  [ -n "$v_session" ] && echo "  Session (vanilla): $v_session"
+  [ -n "$s_session" ] && echo "  Session (pyramid): $s_session"
   echo ""
 
   # ── Metrics log (no prompts or responses) ──
@@ -453,12 +472,18 @@ $(get_subagent_prompt "$SKILL_SUBAGENTS")"
     echo "METRICS: vanilla-read (${VANILLA_LABEL}) cost=\$${v_cost} in=${v_input} out=${v_output}"
     echo "METRICS: pyramid-read (${SKILL_LABEL}) cost=\$${s_cost} in=${s_input} out=${s_output}"
     echo "JUDGE: $verdict"
+    [ -n "$v_session" ] && echo "SESSION: vanilla-read $v_session"
+    [ -n "$s_session" ] && echo "SESSION: pyramid-read $s_session"
     echo ""
   } >> "$LOG_FILE"
 
   # ── Accumulators ──
   total_vanilla_cost=$(echo "$total_vanilla_cost + ${v_cost:-0}" | bc)
   total_skill_cost=$(echo "$total_skill_cost + ${s_cost:-0}" | bc)
+  total_vanilla_input=$((total_vanilla_input + ${v_input:-0}))
+  total_vanilla_output=$((total_vanilla_output + ${v_output:-0}))
+  total_skill_input=$((total_skill_input + ${s_input:-0}))
+  total_skill_output=$((total_skill_output + ${s_output:-0}))
 
   delta_sign=$(echo "${v_cost:-0} ${s_cost:-0}" | awk '{if ($2 < $1 - 0.000001) print "cheaper"; else if ($2 > $1 + 0.000001) print "costlier"; else print "equal"}')
   case "$delta_sign" in
@@ -520,7 +545,7 @@ if [ -n "$METRICS_LOG" ]; then
     echo "    Vanilla-read wins: ${judge_vanilla}  |  Pyramid-read wins: ${judge_skill}  |  Tie: ${judge_tie}"
     echo "  ─────────────────────────────────────"
     echo ""
-    echo "STAGE_STATS:${STAGE_ID}:${scenario_count}:${total_vanilla_cost}:${total_skill_cost}:${delta_pct}:${judge_vanilla}:${judge_skill}:${judge_tie}"
+    echo "STAGE_STATS:${STAGE_ID}:${scenario_count}:${total_vanilla_cost}:${total_skill_cost}:${delta_pct}:${judge_vanilla}:${judge_skill}:${judge_tie}:${total_vanilla_input}:${total_vanilla_output}:${total_skill_input}:${total_skill_output}"
     echo ""
   } >> "$METRICS_LOG"
 fi
