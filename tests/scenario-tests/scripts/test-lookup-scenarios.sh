@@ -17,6 +17,7 @@ VANILLA_SUBAGENT_MODEL=""    # defaults to VANILLA_MODEL if empty
 SKILL_SUBAGENTS=""           # "" | "vanilla" | "pyramid-reader"
 SKILL_SUBAGENT_MODEL=""      # defaults to SKILL_MODEL if empty
 CUSTOM_SUBAGENT_LAUNCH_PROMPT=""
+NO_SKILL=0
 LOGS_DIR="$SCRIPT_DIR/../logs"
 LOG_FILE="$LOGS_DIR/test-results-$(date +%Y-%m-%d-%H%M%S).log"
 AGENTS_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)/.claude/agents"
@@ -33,6 +34,7 @@ usage() {
   echo "  --skill-subagents TYPE      Enable subagents for skill side: vanilla|pyramid-reader"
   echo "  --skill-subagent-model M    Model for skill side subagents (default: skill model)"
   echo "  --subagent-launch-prompt T  Override subagent instruction appended to prompt"
+  echo "  --no-skill                  Disable skill on both sides (for subagent-type comparison)"
   echo "  --verbose                   Show full claude output"
   exit "${1:-1}"
 }
@@ -50,6 +52,7 @@ while [[ $# -gt 0 ]]; do
     --skill-subagents)          SKILL_SUBAGENTS="$2"; shift 2 ;;
     --skill-subagent-model)     SKILL_SUBAGENT_MODEL="$2"; shift 2 ;;
     --subagent-launch-prompt)   CUSTOM_SUBAGENT_LAUNCH_PROMPT="$2"; shift 2 ;;
+    --no-skill)                 NO_SKILL=1; shift ;;
     --verbose)                  VERBOSE=1; shift ;;
     -h|--help)                  usage 0 ;;
     *) echo "Unknown option: $1"; usage ;;
@@ -205,7 +208,24 @@ run_judge() {
   local skill_response="$4"
 
   local judge_prompt
-  judge_prompt="You are comparing two AI responses to the same documentation lookup question.
+  if [ "$NO_SKILL" -eq 1 ]; then
+    judge_prompt="You are comparing two AI responses to the same documentation lookup question.
+
+DOCS DIR: ${docs_dir}
+QUESTION: ${question}
+
+=== RESPONSE A (vanilla subagents) ===
+${vanilla_response}
+
+=== RESPONSE B (pyramid-reader subagents) ===
+${skill_response}
+
+Which response better answers the question? Consider accuracy, completeness, and relevance.
+Reply with exactly two lines and nothing else:
+WINNER: A or B or TIE
+REASON: one sentence"
+  else
+    judge_prompt="You are comparing two AI responses to the same documentation lookup question.
 
 DOCS DIR: ${docs_dir}
 QUESTION: ${question}
@@ -220,6 +240,7 @@ Which response better answers the question? Consider accuracy, completeness, and
 Reply with exactly two lines and nothing else:
 WINNER: A or B or TIE
 REASON: one sentence"
+  fi
 
   local judge_output judge_stream judge_stderr judge_exit=0
   judge_stream=$(mktemp)
@@ -326,7 +347,7 @@ $(get_subagent_prompt "$SKILL_SUBAGENTS")"
   [ -n "$VANILLA_SUBAGENTS" ] && patch_subagent "$VANILLA_SUBAGENTS" "$VANILLA_SUBAGENT_MODEL"
   vanilla_stream=$(run_scenario "$vanilla_prompt" "$VANILLA_MODEL")
   [ -n "$VANILLA_SUBAGENTS" ] && unpatch_subagent "$VANILLA_SUBAGENTS"
-  enable_skill
+  [ "$NO_SKILL" -eq 0 ] && enable_skill
   extract_metrics "$vanilla_stream"
   v_cost="$METRIC_COST"
   v_input="$METRIC_INPUT"
@@ -353,10 +374,17 @@ $(get_subagent_prompt "$SKILL_SUBAGENTS")"
   delta_str=$(cost_delta "$v_cost" "$s_cost")
 
   # ── Print ──
-  printf "  Vanilla-read (%s):  in=%s  out=%s  cost=\$%.4f\n" \
-    "$VANILLA_LABEL" "$(fmt_num "$v_input")" "$(fmt_num "$v_output")" "$v_cost"
-  printf "  Pyramid-read (%s):  in=%s  out=%s  cost=\$%.4f  %s\n" \
-    "$SKILL_LABEL" "$(fmt_num "$s_input")" "$(fmt_num "$s_output")" "$s_cost" "$delta_str"
+  if [ "$NO_SKILL" -eq 1 ]; then
+    side_a_label="Side-A"
+    side_b_label="Side-B"
+  else
+    side_a_label="Vanilla-read"
+    side_b_label="Pyramid-read"
+  fi
+  printf "  %s (%s):  in=%s  out=%s  cost=\$%.4f\n" \
+    "$side_a_label" "$VANILLA_LABEL" "$(fmt_num "$v_input")" "$(fmt_num "$v_output")" "$v_cost"
+  printf "  %s (%s):  in=%s  out=%s  cost=\$%.4f  %s\n" \
+    "$side_b_label" "$SKILL_LABEL" "$(fmt_num "$s_input")" "$(fmt_num "$s_output")" "$s_cost" "$delta_str"
   echo "  LLM-judge:     ${verdict}"
   echo ""
 
@@ -406,10 +434,18 @@ net_delta=$(echo "$total_vanilla_cost $total_skill_cost" | awk '{
   else                        printf "$0.0000  (equal overall)  0.00%%"
 }')
 
+if [ "$NO_SKILL" -eq 1 ]; then
+  side_a_label="Side-A"
+  side_b_label="Side-B"
+else
+  side_a_label="Vanilla-read"
+  side_b_label="Pyramid-read"
+fi
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Results: ${scenario_count} scenarios"
-printf "  Vanilla-read total cost: \$%.4f\n" "$total_vanilla_cost"
-printf "  Pyramid-read total cost: \$%.4f\n" "$total_skill_cost"
+printf "  %s total cost: \$%.4f\n" "$side_a_label" "$total_vanilla_cost"
+printf "  %s total cost: \$%.4f\n" "$side_b_label" "$total_skill_cost"
 echo "  Net delta:               ${net_delta}"
 echo ""
 echo "  Cost breakdown:"
@@ -418,8 +454,8 @@ echo "    pyramid-read costlier: ${costlier_count} scenarios"
 echo "    equal:                 ${equal_count} scenarios"
 echo ""
 echo "  LLM-judge -> accuracy, completeness, and relevance:"
-echo "    Pyramid-read wins:  ${judge_skill} scenarios"
-echo "    Vanilla-read wins:  ${judge_vanilla} scenarios"
+echo "    ${side_b_label} wins:  ${judge_skill} scenarios"
+echo "    ${side_a_label} wins:  ${judge_vanilla} scenarios"
 echo "    Tie:                ${judge_tie} scenarios"
 echo ""
 echo "  Log: ${LOG_FILE}"
