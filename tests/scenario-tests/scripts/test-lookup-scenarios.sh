@@ -377,6 +377,25 @@ $(get_subagent_prompt "$SKILL_SUBAGENTS")"
   v_response="$METRIC_RESPONSE"
   rm -f "$vanilla_stream"
 
+  # Retry once if the model returned the empty-message fallback (same non-deterministic
+  # behaviour can affect the vanilla side when subagents are enabled).
+  if [ -n "$VANILLA_SUBAGENTS" ] && printf '%s' "$v_response" | grep -qi "came through empty\|what would you like help with"; then
+    echo "  [RETRY] Vanilla-read got empty-message fallback, retrying once..." >&2
+    [ "$NO_SKILL" -eq 0 ] && disable_skill
+    patch_subagent "$VANILLA_SUBAGENTS" "$VANILLA_SUBAGENT_MODEL"
+    run_scenario "$vanilla_prompt" "$VANILLA_MODEL"
+    vanilla_stream="$LAST_STREAM_FILE"
+    v_session="$LAST_SESSION_FILE"
+    unpatch_subagent "$VANILLA_SUBAGENTS"
+    [ "$NO_SKILL" -eq 0 ] && enable_skill
+    extract_metrics "$vanilla_stream"
+    v_cost="$METRIC_COST"
+    v_input="$METRIC_INPUT"
+    v_output="$METRIC_OUTPUT"
+    v_response="$METRIC_RESPONSE"
+    rm -f "$vanilla_stream"
+  fi
+
   # ── Skill run ──
   [ -n "$SKILL_SUBAGENTS" ] && patch_subagent "$SKILL_SUBAGENTS" "$SKILL_SUBAGENT_MODEL"
   run_scenario "$skill_prompt" "$SKILL_MODEL"
