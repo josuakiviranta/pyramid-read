@@ -238,8 +238,7 @@ run_judge() {
   local skill_response="$4"
 
   local judge_prompt
-  if [ "$NO_SKILL" -eq 1 ]; then
-    judge_prompt="You are comparing two AI responses to the same documentation lookup question.
+  judge_prompt="You are comparing two AI responses to the same documentation lookup question.
 
 DOCS DIR: ${docs_dir}
 QUESTION: ${question}
@@ -254,23 +253,6 @@ Which response better answers the question? Consider accuracy, completeness, and
 Reply with exactly two lines and nothing else:
 WINNER: A or B or TIE
 REASON: one sentence"
-  else
-    judge_prompt="You are comparing two AI responses to the same documentation lookup question.
-
-DOCS DIR: ${docs_dir}
-QUESTION: ${question}
-
-=== RESPONSE A ===
-${vanilla_response}
-
-=== RESPONSE B ===
-${skill_response}
-
-Which response better answers the question? Consider accuracy, completeness, and relevance.
-Reply with exactly two lines and nothing else:
-WINNER: A or B or TIE
-REASON: one sentence"
-  fi
 
   local judge_output judge_stream judge_stderr judge_exit=0
   judge_stream=$(mktemp)
