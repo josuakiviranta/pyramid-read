@@ -73,7 +73,7 @@ table=$(
   echo "  LLM-judge prompt (per scenario):"
   echo "    \"You are comparing two AI responses to the same documentation lookup question."
   echo "     QUESTION: <scenario prompt>"
-  echo "     RESPONSE A (Vanilla-read) | RESPONSE B (Pyramid-read)"
+  echo "     RESPONSE A / RESPONSE B  (randomly assigned per scenario — blind, no system names)"
   echo "     Which response better answers the question? Consider accuracy, completeness, and relevance."
   echo "     Reply with: WINNER: A or B or TIE / REASON: one sentence\""
   echo ""
