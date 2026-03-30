@@ -408,8 +408,28 @@ $(get_subagent_prompt "$SKILL_SUBAGENTS")"
     rm -f "$skill_stream"
   fi
 
-  # ── Judge ──
-  run_judge "$DOCS_DIR" "$question" "$v_response" "$s_response"
+  # ── Judge — blind random assignment ──
+  if (( RANDOM % 2 == 0 )); then
+    vanilla_is_a=1
+    judge_a_response="$v_response"
+    judge_b_response="$s_response"
+  else
+    vanilla_is_a=0
+    judge_a_response="$s_response"
+    judge_b_response="$v_response"
+  fi
+  run_judge "$DOCS_DIR" "$question" "$judge_a_response" "$judge_b_response"
+
+  # Translate A/B winner back to vanilla/skill
+  JUDGE_ASSIGNMENT="vanilla=A  pyramid=B"
+  if [ "$vanilla_is_a" -eq 0 ]; then
+    JUDGE_ASSIGNMENT="vanilla=B  pyramid=A"
+    case "$JUDGE_WINNER" in
+      A) JUDGE_WINNER=B ;;
+      B) JUDGE_WINNER=A ;;
+    esac
+  fi
+
   verdict=$(format_verdict "$JUDGE_WINNER" "$JUDGE_REASON")
 
   # ── Delta ──
