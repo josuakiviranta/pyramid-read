@@ -244,10 +244,10 @@ run_judge() {
 DOCS DIR: ${docs_dir}
 QUESTION: ${question}
 
-=== RESPONSE A (vanilla subagents) ===
+=== RESPONSE A ===
 ${vanilla_response}
 
-=== RESPONSE B (pyramid-reader subagents) ===
+=== RESPONSE B ===
 ${skill_response}
 
 Which response better answers the question? Consider accuracy, completeness, and relevance.
@@ -260,10 +260,10 @@ REASON: one sentence"
 DOCS DIR: ${docs_dir}
 QUESTION: ${question}
 
-=== RESPONSE A (vanilla, no pyramid-read skill) ===
+=== RESPONSE A ===
 ${vanilla_response}
 
-=== RESPONSE B (with pyramid-read skill) ===
+=== RESPONSE B ===
 ${skill_response}
 
 Which response better answers the question? Consider accuracy, completeness, and relevance.
