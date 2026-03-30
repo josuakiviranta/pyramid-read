@@ -229,13 +229,13 @@ extract_metrics() {
   ' "$stream_file")
 }
 
-# run_judge <docs_dir> <question> <vanilla_response> <skill_response>
+# run_judge <docs_dir> <question> <response_a> <response_b>
 # Sets JUDGE_WINNER (A|B|TIE) and JUDGE_REASON
 run_judge() {
   local docs_dir="$1"
   local question="$2"
-  local vanilla_response="$3"
-  local skill_response="$4"
+  local response_a="$3"
+  local response_b="$4"
 
   local judge_prompt
   judge_prompt="You are comparing two AI responses to the same documentation lookup question.
@@ -244,10 +244,10 @@ DOCS DIR: ${docs_dir}
 QUESTION: ${question}
 
 === RESPONSE A ===
-${vanilla_response}
+${response_a}
 
 === RESPONSE B ===
-${skill_response}
+${response_b}
 
 Which response better answers the question? Consider accuracy, completeness, and relevance.
 Reply with exactly two lines and nothing else:
